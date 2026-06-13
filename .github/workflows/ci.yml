@@ -8,6 +8,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build:
     name: Build & test (macOS)
@@ -57,7 +60,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Ditto.app
-          path: dist/Ditto.app
+          path: .build/stage/Ditto.app
+          if-no-files-found: ignore
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')

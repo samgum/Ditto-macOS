@@ -124,6 +124,24 @@ enum SelfTest {
             check("database round-trip", false)
         }
 
+        // MARK: Windows-compatible encryption round-trip (KeePass AES-KDF + CBC)
+        let winPassword = "LetMeIn"
+        let winSecret = Data("clip payload for windows peer".utf8)
+        if let encrypted = try? WindowsEncryption.encrypt(winSecret, password: winPassword),
+           let decrypted = try? WindowsEncryption.decrypt(encrypted, password: winPassword) {
+            check("windows enc round-trip", decrypted == winSecret)
+            check("windows enc header size", encrypted.count > WindowsEncryption.headerSize)
+            check("windows enc differs from plaintext", encrypted != winSecret)
+        } else {
+            check("windows enc round-trip", false)
+        }
+        if let encrypted = try? WindowsEncryption.encrypt(winSecret, password: winPassword) {
+            let wrongDecrypt = try? WindowsEncryption.decrypt(encrypted, password: "wrong")
+            check("windows enc wrong password rejected", wrongDecrypt == nil)
+        } else {
+            check("windows enc wrong password rejected", false)
+        }
+
         // MARK: Windows importer graceful failure on junk
         let junkURL = tempDir.appendingPathComponent("junk.db")
         try? Data("not a database".utf8).write(to: junkURL)
