@@ -9,6 +9,7 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
     private let onChanged: () -> Void
     private let textView = NSTextView()
     private let saveButton = NSButton(title: "", target: nil, action: nil)
+    private let saveAndClipboardButton = NSButton(title: "", target: nil, action: nil)
     private let closeButton = NSButton(title: "", target: nil, action: nil)
 
     init(store: ClipboardStore, entry: ClipboardEntry, onChanged: @escaping () -> Void) {
@@ -50,13 +51,18 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
         saveButton.action = #selector(save)
         saveButton.keyEquivalent = "\r"
 
+        saveAndClipboardButton.title = LocalizationManager.shared.text("save") + " + " + LocalizationManager.shared.text("copy")
+        saveAndClipboardButton.bezelStyle = .rounded
+        saveAndClipboardButton.target = self
+        saveAndClipboardButton.action = #selector(saveAndPutOnClipboard)
+
         closeButton.title = LocalizationManager.shared.text("close")
         closeButton.bezelStyle = .rounded
         closeButton.target = self
         closeButton.action = #selector(close)
         closeButton.keyEquivalent = "\u{1b}"
 
-        let buttonRow = NSStackView(views: [NSView(), saveButton, closeButton])
+        let buttonRow = NSStackView(views: [NSView(), saveAndClipboardButton, saveButton, closeButton])
         buttonRow.orientation = .horizontal
         buttonRow.translatesAutoresizingMaskIntoConstraints = false
 
@@ -92,5 +98,12 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
         store.update(entry)
         onChanged()
         close()
+    }
+
+    /// Save and place the edited clip on the system clipboard (Windows
+    /// EditWnd "Save & Close & put on clipboard").
+    @objc private func saveAndPutOnClipboard() {
+        save()
+        store.copyToPasteboard(entry)
     }
 }

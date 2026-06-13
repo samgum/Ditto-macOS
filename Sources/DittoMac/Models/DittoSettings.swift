@@ -112,6 +112,16 @@ enum DittoSettings {
         set { defaults.set(newValue, forKey: Key.hideOnPaste) }
     }
 
+    static var refreshAfterPaste: Bool {
+        get { defaults.object(forKey: "Ditto.RefreshViewAfterPasting") == nil ? true : defaults.bool(forKey: "Ditto.RefreshViewAfterPasting") }
+        set { defaults.set(newValue, forKey: "Ditto.RefreshViewAfterPasting") }
+    }
+
+    static var moveSelectionOnOpen: Bool {
+        get { defaults.object(forKey: "Ditto.MoveSelectionOnOpenHotkey") == nil ? true : defaults.bool(forKey: "Ditto.MoveSelectionOnOpenHotkey") }
+        set { defaults.set(newValue, forKey: "Ditto.MoveSelectionOnOpenHotkey") }
+    }
+
     static var promptWhenDeleting: Bool {
         get { defaults.object(forKey: Key.promptWhenDeleting) == nil ? true : defaults.bool(forKey: Key.promptWhenDeleting) }
         set { defaults.set(newValue, forKey: Key.promptWhenDeleting) }

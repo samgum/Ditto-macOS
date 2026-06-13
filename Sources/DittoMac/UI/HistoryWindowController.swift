@@ -52,6 +52,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private var currentGroupFilter: GroupFilter = .all
     private var currentTypeFilter: TypeFilter = .all
     private var searchMode: SearchMode = .contains
+    private var lastSearchQuery = ""
     private var keyEventMonitor: Any?
     private var themeObserver: NSObjectProtocol?
 
@@ -226,7 +227,13 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     // MARK: - Actions
 
-    @objc private func searchChanged() { applySearch() }
+    @objc private func searchChanged() {
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty == false {
+            lastSearchQuery = query
+        }
+        applySearch()
+    }
 
     @objc private func modeChanged() {
         if let mode = SearchMode.allCases[safe: modePopup.indexOfSelectedItem] {
@@ -275,6 +282,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         store.copyToPasteboard(entry)
         store.markPasted(entry)
         pasteHandler()
+        if DittoSettings.refreshAfterPaste {
+            refresh()
+        }
     }
 
     @objc private func pasteSpecial(_ sender: NSMenuItem) {
@@ -725,6 +735,17 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             }
         }
 
+        // Alt+C cancels/clears the active filter (Windows CANCELFILTER).
+        if modifiers == .option, let char = event.charactersIgnoringModifiers?.lowercased(), char == "c" {
+            searchField.stringValue = ""
+            currentGroupFilter = .all
+            currentTypeFilter = .all
+            rebuildGroupFilterPopup()
+            rebuildTypeFilterPopup()
+            applySearch()
+            return nil
+        }
+
         // F3 toggles the description/preview pane (matches Windows default).
         if Int(event.keyCode) == kVK_F3 {
             toggleDescription()
@@ -745,6 +766,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         if window?.firstResponder is NSTextView, searchField.currentEditor() != nil {
             if Int(event.keyCode) == kVK_Escape {
                 window?.makeFirstResponder(tableView)
+                return nil
+            }
+            // Up arrow recalls the last search (APPLY_LAST_SEARCH).
+            if Int(event.keyCode) == kVK_UpArrow, lastSearchQuery.isEmpty == false {
+                searchField.stringValue = lastSearchQuery
+                applySearch()
                 return nil
             }
             return event
