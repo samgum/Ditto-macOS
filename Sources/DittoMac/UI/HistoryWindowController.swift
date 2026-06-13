@@ -943,6 +943,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         window.alphaValue = CGFloat(1.0 - DittoSettings.transparencyPercent / 100.0)
     }
 
+    /// Re-apply always-on-top / transparency after the setting changes
+    /// (callable from the AppDelegate's menu-bar toggle).
+    func applyWindowChromeFromOutside() {
+        applyWindowChrome()
+    }
+
     @objc private func toggleAlwaysOnTop() {
         DittoSettings.alwaysOnTop.toggle()
         applyWindowChrome()

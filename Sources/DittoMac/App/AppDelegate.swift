@@ -25,6 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     private let syncCoordinator = SyncCoordinator()
 
+    /// Held for the lifetime of the app to prevent App Nap — without this,
+    /// macOS suspends the menu-bar process and it stops watching the
+    /// clipboard / can't be summoned by the global hot key.
+    private var keepAliveActivity: NSObjectProtocol?
+
     private var mainHotKeyId: UInt32?
     private var perClipHotKeyIds: [UInt32: UUID] = [:]
     private var firstTenHotKeyIds: [UInt32: Int] = [:]
@@ -49,6 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         NSApp.setActivationPolicy(.accessory)
         Self.log("activationPolicy set")
         ProcessInfo.processInfo.disableAutomaticTermination("Ditto monitors the clipboard from the menu bar.")
+        ProcessInfo.processInfo.disableSuddenTermination()
+        // Prevent App Nap so the process keeps running and the global hot key
+        // stays responsive even when no window is open.
+        keepAliveActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep],
+            reason: "Ditto monitors the clipboard from the menu bar."
+        )
 
         if DittoSettings.showStartupMessage {
             showStartupMessageIfNeeded()
@@ -329,6 +341,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         alert.runModal()
     }
 
+    @objc func toggleAlwaysOnTopFromMenu() {
+        DittoSettings.alwaysOnTop.toggle()
+        historyWindowController?.applyWindowChromeFromOutside()
+    }
+
+    @objc func grantAccessibility() {
+        PasteSimulator.promptForAccessibility()
+    }
+
     private func reregisterHotKeys() {
         hotKeyController?.unregisterAll()
         copyBufferHotKeyIds.removeAll()
@@ -471,6 +492,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         addItem(menu, title: LocalizationManager.shared.text("preferences"), action: #selector(showPreferences), key: ",")
         addItem(menu, title: LocalizationManager.shared.text("statistics"), action: #selector(showStatistics), key: "")
         menu.addItem(.separator())
+
+        // Always-on-top toggle (accessible without opening the window).
+        let onTop = addItem(menu, title: LocalizationManager.shared.text("always_on_top"), action: #selector(toggleAlwaysOnTopFromMenu), key: "")
+        onTop.state = DittoSettings.alwaysOnTop ? .on : .off
+
+        // Accessibility status (needed for paste). Lets the user open the
+        // prompt directly from the menu bar.
+        let axTitle = PasteSimulator.hasAccessibilityPermission
+            ? "✓ Accessibility"
+            : "⚠ Grant Accessibility…"
+        addItem(menu, title: axTitle, action: #selector(grantAccessibility), key: "")
 
         let groupsItem = addItem(menu, title: LocalizationManager.shared.text("group") + "s", action: #selector(showGroups), key: "")
         _ = groupsItem
