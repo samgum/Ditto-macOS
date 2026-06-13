@@ -179,6 +179,7 @@ final class LocalizationManager {
         "enable_expiry": "Enable clip expiry",
         "max_clip_size": "Max clip size (MB, 0 = unlimited)",
         "update_time_on_paste": "Move clip to top on paste",
+        "restore_clipboard_after_paste": "Restore previous clipboard after paste",
         "hide_on_paste": "Hide Ditto after paste",
         "prompt_on_delete": "Confirm before deleting",
         "show_startup_message": "Show startup message",

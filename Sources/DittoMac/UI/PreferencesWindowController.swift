@@ -151,6 +151,8 @@ final class PreferencesWindowController: NSWindowController {
         bindCheckbox(startupMessageButton, default: DittoSettings.showStartupMessage) { DittoSettings.showStartupMessage = $0 }
         bindCheckbox(updateTimeOnPasteButton, default: DittoSettings.updateTimeOnPaste) { DittoSettings.updateTimeOnPaste = $0 }
         bindCheckbox(hideOnPasteButton, default: DittoSettings.hideDittoOnPaste) { DittoSettings.hideDittoOnPaste = $0 }
+        let restoreClipboardButton = NSButton(checkboxWithTitle: LocalizationManager.shared.text("restore_clipboard_after_paste"), target: nil, action: nil)
+        bindCheckbox(restoreClipboardButton, default: DittoSettings.restoreClipboardAfterPaste) { DittoSettings.restoreClipboardAfterPaste = $0 }
 
         return grid([
             [label(LocalizationManager.shared.text("language")), languagePopup],
@@ -161,6 +163,7 @@ final class PreferencesWindowController: NSWindowController {
             [NSView(), promptOnDeleteButton],
             [NSView(), updateTimeOnPasteButton],
             [NSView(), hideOnPasteButton],
+            [NSView(), restoreClipboardButton],
             [NSView(), startupMessageButton]
         ])
     }

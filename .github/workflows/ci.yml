@@ -50,11 +50,11 @@ jobs:
       - name: Verify signature
         run: codesign -dv dist/Ditto.app 2>&1 || true
 
-      - name: Upload DMG artifact
+      - name: Upload versioned DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ditto-macOS.dmg
-          path: dist/Ditto-macOS.dmg
+          name: Ditto-macOS-dmg
+          path: dist/Ditto-macOS-*.dmg
 
       - name: Upload .app artifact (for inspection)
         uses: actions/upload-artifact@v4
@@ -67,4 +67,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Ditto-macOS.dmg
+          files: |
+            dist/Ditto-macOS-*.dmg
+            dist/Ditto-macOS.dmg

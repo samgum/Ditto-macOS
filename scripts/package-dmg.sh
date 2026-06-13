@@ -67,11 +67,19 @@ ln -s /Applications "$STAGE_DIR/Applications"
 echo "==> Building DMG"
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
+
+# Version-stamped filename, read from Info.plist.
+VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$RESOURCES_DIR/Info.plist" 2>/dev/null || echo "0.0.0")
+DMG_NAME="Ditto-macOS-${VERSION}.dmg"
+
 hdiutil create -volname "$APP_NAME" \
   -srcfolder "$STAGE_DIR" \
   -ov -format UDZO \
-  "$DIST_DIR/Ditto-macOS.dmg"
+  "$DIST_DIR/$DMG_NAME"
 
-echo "==> Done: $DIST_DIR/Ditto-macOS.dmg"
+# Also keep an unversioned symlink-style copy for convenience/CI defaults.
+cp "$DIST_DIR/$DMG_NAME" "$DIST_DIR/Ditto-macOS.dmg"
+
+echo "==> Done: $DIST_DIR/$DMG_NAME"
 echo "    (Ad-hoc signed — to open on another Mac: right-click ▸ Open, or"
 echo "     approve in System Settings ▸ Privacy & Security.)"

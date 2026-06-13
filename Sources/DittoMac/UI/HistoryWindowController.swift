@@ -279,9 +279,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     @objc private func pasteSelectedEntry() {
         guard let entry = currentEntry else { return }
+        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         store.copyToPasteboard(entry)
         store.markPasted(entry)
         pasteHandler()
+        if let snapshot { ClipboardSaveRestore.restore(snapshot) }
         if DittoSettings.refreshAfterPaste {
             refresh()
         }

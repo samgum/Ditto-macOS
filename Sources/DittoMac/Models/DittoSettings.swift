@@ -112,6 +112,14 @@ enum DittoSettings {
         set { defaults.set(newValue, forKey: Key.hideOnPaste) }
     }
 
+    /// Put the user's previous clipboard back after pasting a Ditto clip, so
+    /// Ditto doesn't clobber what they had copied (Windows
+    /// RestoreClipboardDelay behaviour, default on).
+    static var restoreClipboardAfterPaste: Bool {
+        get { defaults.object(forKey: "Ditto.RestoreClipboardAfterPaste") == nil ? true : defaults.bool(forKey: "Ditto.RestoreClipboardAfterPaste") }
+        set { defaults.set(newValue, forKey: "Ditto.RestoreClipboardAfterPaste") }
+    }
+
     static var refreshAfterPaste: Bool {
         get { defaults.object(forKey: "Ditto.RefreshViewAfterPasting") == nil ? true : defaults.bool(forKey: "Ditto.RefreshViewAfterPasting") }
         set { defaults.set(newValue, forKey: "Ditto.RefreshViewAfterPasting") }

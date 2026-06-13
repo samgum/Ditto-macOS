@@ -94,7 +94,12 @@ final class ClipTableCellView: NSTableCellView {
             previewLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
 
             pinnedIcon.trailingAnchor.constraint(equalTo: indexLabel.leadingAnchor, constant: -2),
-            pinnedIcon.centerYAnchor.constraint(equalTo: centerYAnchor)
+            pinnedIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+
+            pastedDot.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            pastedDot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
+            pastedDot.widthAnchor.constraint(equalToConstant: 7),
+            pastedDot.heightAnchor.constraint(equalToConstant: 7)
         ])
     }
 
@@ -137,6 +142,15 @@ final class ClipTableCellView: NSTableCellView {
 
         pinnedIcon.stringValue = entry.favorite ? "★" : (entry.neverAutoDelete ? "📌" : "")
         pinnedIcon.isHidden = entry.isPinned == false
+
+        // Green dot for a clip pasted in the last 30s (Windows
+        // ShowIfClipWasPasted / m_clipPastedColor).
+        if let lastPaste = entry.lastPasteDate, Date().timeIntervalSince(lastPaste) < 30 {
+            pastedDot.isHidden = false
+            pastedDot.layer?.backgroundColor = theme.pastedIndicator.cgColor
+        } else {
+            pastedDot.isHidden = true
+        }
     }
 
     private static func symbol(for entry: ClipboardEntry) -> String {
