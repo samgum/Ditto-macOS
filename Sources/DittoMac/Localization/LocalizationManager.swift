@@ -16,8 +16,19 @@ final class LocalizationManager {
     let languages: [(code: String, name: String)] = [
         ("en", "English"),
         ("zh-Hans", "简体中文"),
-        ("zh-Hant", "繁體中文")
+        ("zh-Hant", "繁體中文"),
+        ("ja", "日本語"),
+        ("ko", "한국어"),
+        ("fr", "Français"),
+        ("de", "Deutsch"),
+        ("es", "Español"),
+        ("pt-BR", "Português (Brasil)"),
+        ("ru", "Русский"),
+        ("ar", "العربية")
     ]
+
+    /// Right-to-left languages get a flipped user interface direction.
+    var isRTL: Bool { currentLanguage == "ar" }
 
     private init() {
         loadLanguage(currentLanguage)

@@ -51,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             Statistics.shared.recordCopy()
             self?.historyWindowController?.refresh()
             self?.rebuildStatusMenuIfNeeded()
+            if let entry = self?.store.entries.first {
+                self?.syncCoordinator.broadcast(entry: entry)
+            }
         }
         monitor.start()
         self.monitor = monitor
@@ -68,6 +71,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     private func applyThemeGlobally() {
         NSApp.appearance = DittoTheme.current.effectiveAppearance
+        applyLayoutDirection()
+    }
+
+    private func applyLayoutDirection() {
+        let direction: NSUserInterfaceLayoutDirection = LocalizationManager.shared.isRTL ? .rightToLeft : .leftToRight
+        for window in NSApp.windows {
+            window.contentView?.userInterfaceLayoutDirection = direction
+        }
     }
 
     private func registerNotifications() {
