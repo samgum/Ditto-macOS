@@ -19,8 +19,16 @@ final class LoginAgentManager {
         FileManager.default.fileExists(atPath: plistURL.path)
     }
 
+    /// True only when running from a real `.app` bundle. We refuse to install
+    /// a LaunchAgent for a bare `swift run` executable (its path is ephemeral
+    /// and KeepAlive would endlessly respawn a stale binary).
+    private var isBundledApp: Bool {
+        Bundle.main.bundleIdentifier?.isEmpty == false
+            && Bundle.main.bundleURL.pathExtension == "app"
+    }
+
     func installOrRefresh() {
-        guard let executableURL = Bundle.main.executableURL else { return }
+        guard isBundledApp, let executableURL = Bundle.main.executableURL else { return }
         try? FileManager.default.createDirectory(at: launchAgentsDirectory, withIntermediateDirectories: true)
 
         let plist: [String: Any] = [

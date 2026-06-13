@@ -35,15 +35,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.log("launch begin; pid=\(ProcessInfo.processInfo.processIdentifier); bundle=\(Bundle.main.bundleIdentifier ?? "nil")")
+
         // Single-instance guard: if another Ditto is already running, activate
         // it and quit this one (the LaunchAgent / login item can otherwise
         // spawn duplicates).
         if isAlreadyRunning() {
+            Self.log("another instance detected — exiting")
             NSApp.terminate(nil)
             return
         }
 
         NSApp.setActivationPolicy(.accessory)
+        Self.log("activationPolicy set")
         ProcessInfo.processInfo.disableAutomaticTermination("Ditto monitors the clipboard from the menu bar.")
 
         if DittoSettings.showStartupMessage {
@@ -51,10 +55,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
 
         applyThemeGlobally()
+        Self.log("theme applied")
         registerHotKeys()
+        Self.log("hotkeys registered")
         configureStatusItem()
+        Self.log("status item configured")
         activeAppTracker.start()
         loginAgentManager.installOrRefresh()
+        Self.log("login agent installed")
 
         let monitor = ClipboardMonitor(store: store)
         monitor.onChange = { [weak self] in
@@ -71,6 +79,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         store.enforceExpiry()
         registerNotifications()
         startSync()
+        Self.log("launch complete — status item should be visible")
+    }
+
+    /// Unbuffered stderr logger for launch diagnostics.
+    static func log(_ message: String) {
+        let line = "[Ditto] \(message)\n"
+        FileHandle.standardError.write(line.data(using: .utf8) ?? Data())
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -36,8 +36,9 @@ final class MacClipboardDatabase {
         if readOnly == false {
             try execute(useWAL ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE")
             try execute("PRAGMA busy_timeout = 5000")
-            try createSchema()
-            try migrate()
+            try createTables()
+            try migrate()       // ensure every column exists BEFORE indexes
+            try createIndexes()
         }
     }
 
@@ -47,7 +48,7 @@ final class MacClipboardDatabase {
 
     // MARK: - Schema
 
-    private func createSchema() throws {
+    private func createTables() throws {
         try execute(
             """
             CREATE TABLE IF NOT EXISTS ClipboardEntries(
@@ -57,20 +58,7 @@ final class MacClipboardDatabase {
                 htmlBlobKey TEXT,
                 imageBlobKey TEXT,
                 fileURLsJson TEXT,
-                createdAt REAL NOT NULL,
-                lastPasteDate REAL,
-                isFavorite INTEGER,
-                neverAutoDelete INTEGER DEFAULT 0,
-                quickPasteText TEXT,
-                clipOrder REAL DEFAULT 0,
-                shortcutKey INTEGER DEFAULT 0,
-                shortcutGlobal INTEGER DEFAULT 0,
-                moveToGroupShortcut INTEGER DEFAULT 0,
-                globalMoveToGroup INTEGER DEFAULT 0,
-                crc INTEGER,
-                sourceApp TEXT,
-                pasteCount INTEGER DEFAULT 0,
-                groupId INTEGER
+                createdAt REAL NOT NULL
             )
             """
         )
@@ -114,7 +102,9 @@ final class MacClipboardDatabase {
             )
             """
         )
+    }
 
+    private func createIndexes() throws {
         try execute("CREATE INDEX IF NOT EXISTS ClipboardEntries_createdAt ON ClipboardEntries(createdAt DESC)")
         try execute("CREATE INDEX IF NOT EXISTS ClipboardEntries_clipOrder ON ClipboardEntries(clipOrder DESC)")
         try execute("CREATE INDEX IF NOT EXISTS ClipboardEntries_groupId ON ClipboardEntries(groupId)")
@@ -122,27 +112,36 @@ final class MacClipboardDatabase {
         try execute("CREATE INDEX IF NOT EXISTS Groups_parent ON Groups(parentId)")
     }
 
-    /// Column-level migration for databases created by earlier builds.
+    /// Column-level migration. Runs UNCONDITIONALLY (idempotent) so a legacy
+    /// database — e.g. one created by the upstream macOS port with an older
+    /// schema — always ends up with every column the queries expect,
+    /// regardless of its stored user_version.
     private func migrate() throws {
         schemaVersion = userVersion()
-        if schemaVersion < 1 {
-            addColumnIfMissing(table: "ClipboardEntries", column: "neverAutoDelete", type: "INTEGER DEFAULT 0")
-            addColumnIfMissing(table: "ClipboardEntries", column: "quickPasteText", type: "TEXT")
-            addColumnIfMissing(table: "ClipboardEntries", column: "clipOrder", type: "REAL DEFAULT 0")
-            addColumnIfMissing(table: "ClipboardEntries", column: "shortcutKey", type: "INTEGER DEFAULT 0")
-            addColumnIfMissing(table: "ClipboardEntries", column: "shortcutGlobal", type: "INTEGER DEFAULT 0")
-            addColumnIfMissing(table: "ClipboardEntries", column: "crc", type: "INTEGER")
-            addColumnIfMissing(table: "ClipboardEntries", column: "sourceApp", type: "TEXT")
-            addColumnIfMissing(table: "ClipboardEntries", column: "pasteCount", type: "INTEGER DEFAULT 0")
-            addColumnIfMissing(table: "ClipboardEntries", column: "groupId", type: "INTEGER")
-            addColumnIfMissing(table: "ClipboardEntries", column: "lastPasteDate", type: "REAL")
-            // Backfill clipOrder for legacy rows that have none.
-            try execute("UPDATE ClipboardEntries SET clipOrder = createdAt WHERE clipOrder IS NULL OR clipOrder = 0")
+
+        // Every column ClipboardEntries needs beyond (id,text,rtfBlobKey,
+        // htmlBlobKey,imageBlobKey,fileURLsJson,createdAt).
+        let requiredColumns: [(String, String)] = [
+            ("lastPasteDate", "REAL"),
+            ("isFavorite", "INTEGER"),
+            ("neverAutoDelete", "INTEGER DEFAULT 0"),
+            ("quickPasteText", "TEXT"),
+            ("clipOrder", "REAL DEFAULT 0"),
+            ("shortcutKey", "INTEGER DEFAULT 0"),
+            ("shortcutGlobal", "INTEGER DEFAULT 0"),
+            ("moveToGroupShortcut", "INTEGER DEFAULT 0"),
+            ("globalMoveToGroup", "INTEGER DEFAULT 0"),
+            ("crc", "INTEGER"),
+            ("sourceApp", "TEXT"),
+            ("pasteCount", "INTEGER DEFAULT 0"),
+            ("groupId", "INTEGER")
+        ]
+        for (column, type) in requiredColumns {
+            addColumnIfMissing(table: "ClipboardEntries", column: column, type: type)
         }
-        if schemaVersion < 3 {
-            addColumnIfMissing(table: "ClipboardEntries", column: "moveToGroupShortcut", type: "INTEGER DEFAULT 0")
-            addColumnIfMissing(table: "ClipboardEntries", column: "globalMoveToGroup", type: "INTEGER DEFAULT 0")
-        }
+        // Backfill clipOrder for legacy rows that have none / zero.
+        try? execute("UPDATE ClipboardEntries SET clipOrder = createdAt WHERE clipOrder IS NULL OR clipOrder = 0")
+
         setUserVersion(Self.currentSchemaVersion)
         schemaVersion = Self.currentSchemaVersion
     }
