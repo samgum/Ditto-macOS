@@ -1,0 +1,96 @@
+import AppKit
+import Foundation
+
+/// Polls `NSPasteboard.general` and feeds captured clips into the store.
+///
+/// macOS offers no clipboard-change notification, so like the original macOS
+/// port we poll `changeCount` at a configurable interval. We also record the
+/// frontmost application at capture time (Windows `ExternalWindowTracker`)
+/// and honour the include/exclude app filters.
+final class ClipboardMonitor {
+    private let pasteboard = NSPasteboard.general
+    private let store: ClipboardStore
+    private var lastChangeCount: Int
+    private var timer: DispatchSourceTimer?
+    private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.clipboard", qos: .userInitiated)
+    var onChange: (() -> Void)?
+
+    init(store: ClipboardStore) {
+        self.store = store
+        lastChangeCount = NSPasteboard.general.changeCount
+    }
+
+    func start() {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + DittoSettings.pollIntervalSeconds, repeating: DittoSettings.pollIntervalSeconds)
+        timer.setEventHandler { [weak self] in
+            self?.poll()
+        }
+        timer.resume()
+        self.timer = timer
+    }
+
+    func stop() {
+        timer?.cancel()
+        timer = nil
+    }
+
+    /// Force an immediate capture poll (used after `NSPasteboard.writeObjects`
+    /// by our own copy path to keep the change count in sync).
+    func syncChangeCount() {
+        lastChangeCount = pasteboard.changeCount
+    }
+
+    private func poll() {
+        guard pasteboard.changeCount != lastChangeCount else { return }
+        lastChangeCount = pasteboard.changeCount
+
+        let frontApp = NSWorkspace.shared.frontmostApplication
+        let bundleId = frontApp?.bundleIdentifier
+        let appName = frontApp?.localizedName
+
+        // Respect the Windows "Clipboard Viewer Ignore" / exclusion convention:
+        // if the pasting app is Ditto itself, do not re-capture our own paste.
+        if bundleId == Bundle.main.bundleIdentifier {
+            return
+        }
+
+        guard DittoSettings.shouldCapture(bundleId: bundleId) else { return }
+
+        let text = pasteboard.string(forType: .string)
+        let rtfData = pasteboard.data(forType: .rtf)
+        let htmlData = pasteboard.data(forType: .dittoHTML)
+        let imageData = ClipboardMonitor.imageData(from: pasteboard)
+        let fileURLs = ClipboardMonitor.fileURLs(from: pasteboard)
+
+        store.addClipboardPayload(
+            text: text,
+            rtfData: rtfData,
+            htmlData: htmlData,
+            imageData: imageData,
+            fileURLs: fileURLs,
+            sourceApp: appName
+        )
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onChange?()
+        }
+
+        if DittoSettings.playSoundOnCopy {
+            NSSound(named: NSSound.Name("Tink"))?.play()
+        }
+    }
+
+    static func imageData(from pasteboard: NSPasteboard) -> Data? {
+        if let pngData = pasteboard.data(forType: .png) { return pngData }
+        guard let tiffData = pasteboard.data(forType: .tiff),
+              let bitmap = NSBitmapImageRep(data: tiffData) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
+    static func fileURLs(from pasteboard: NSPasteboard) -> [URL] {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [NSURL]
+        return urls?.map { $0 as URL } ?? []
+    }
+}
