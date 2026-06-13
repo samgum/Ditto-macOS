@@ -41,28 +41,23 @@ jobs:
       - name: Build release binary
         run: swift build -c release
 
-      - name: Stage .app bundle
-        run: |
-          mkdir -p Ditto.app/Contents/MacOS
-          mkdir -p Ditto.app/Contents/Resources
-          cp .build/release/DittoMac Ditto.app/Contents/MacOS/Ditto
-          cp Resources/Info.plist Ditto.app/Contents/Info.plist
-          cp -R Sources/DittoMac/Localizations Ditto.app/Contents/Resources/Localizations
-          printf 'APPL????' > Ditto.app/Contents/PkgInfo
+      - name: Package Ditto.app + DMG
+        run: bash scripts/package-dmg.sh
 
-      - name: Ad-hoc code sign
-        run: codesign --force --deep --sign - Ditto.app
-
-      - name: Build DMG
-        run: |
-          mkdir -p dist
-          hdiutil create -volname Ditto -srcfolder Ditto.app -ov -format UDZO dist/Ditto-macOS.dmg
+      - name: Verify signature
+        run: codesign -dv dist/Ditto.app 2>&1 || true
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ditto-macOS
+          name: Ditto-macOS.dmg
           path: dist/Ditto-macOS.dmg
+
+      - name: Upload .app artifact (for inspection)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ditto.app
+          path: dist/Ditto.app
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')

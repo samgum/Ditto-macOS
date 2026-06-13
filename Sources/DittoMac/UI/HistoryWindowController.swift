@@ -261,7 +261,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         case 1: currentGroupFilter = .favorites
         case 2: currentGroupFilter = .ungrouped
         default:
-            let groups = store.groups
+            let groups = store.hierarchicalGroups().map(\.group)
             let index = groupFilterPopup.indexOfSelectedItem - 3
             if let group = groups[safe: index] {
                 currentGroupFilter = .group(group.id)
@@ -1044,9 +1044,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         groupFilterPopup.addItem(withTitle: LocalizationManager.shared.text("all_groups"))
         groupFilterPopup.addItem(withTitle: LocalizationManager.shared.text("favorites"))
         groupFilterPopup.addItem(withTitle: LocalizationManager.shared.text("ungrouped"))
-        let groups = store.groups
-        for group in groups {
-            groupFilterPopup.addItem(withTitle: group.name)
+        let hierarchy = store.hierarchicalGroups()
+        let groups = hierarchy.map(\.group)
+        for (group, depth) in hierarchy {
+            let indent = String(repeating: "    ", count: depth)
+            groupFilterPopup.addItem(withTitle: indent + group.name)
         }
         switch selected {
         case .all: groupFilterPopup.selectItem(at: 0)

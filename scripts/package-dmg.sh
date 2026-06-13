@@ -1,13 +1,16 @@
 #!/bin/bash
-# Builds DittoMac and packages it as Ditto.app inside a DMG.
+# Builds DittoMac and packages a launchable Ditto.app inside a DMG that also
+# contains an /Applications drag-target (the "guiding arrow").
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="Ditto"
+EXEC_NAME="Ditto"
 BUILD_DIR="$ROOT_DIR/.build"
 DIST_DIR="$ROOT_DIR/dist"
 STAGE_DIR="$BUILD_DIR/stage"
 APP_BUNDLE="$STAGE_DIR/$APP_NAME.app"
+RESOURCES_DIR="$ROOT_DIR/Resources"
 
 echo "==> Building release binary"
 swift build --package-path "$ROOT_DIR" -c release
@@ -23,8 +26,9 @@ rm -rf "$STAGE_DIR"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
-cp "$ROOT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+# CFBundleExecutable is "Ditto" (see Info.plist) — the binary must match.
+cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$EXEC_NAME"
+cp "$RESOURCES_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 
 # Bundle localizations
 if [[ -d "$ROOT_DIR/Sources/DittoMac/Localizations" ]]; then
@@ -34,13 +38,40 @@ fi
 # PkgInfo
 printf 'APPL????' > "$APP_BUNDLE/Contents/PkgInfo"
 
-echo "==> Ad-hoc code signing"
-codesign --force --deep --sign - "$APP_BUNDLE"
+# Generate the app icon if missing (CFBundleIconFile = AppIcon)
+if [[ ! -f "$RESOURCES_DIR/AppIcon.icns" ]]; then
+  echo "==> Generating app icon"
+  ICONSET="$BUILD_DIR/AppIcon.iconset"
+  rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+  swift "$ROOT_DIR/scripts/make_icon.swift" "$BUILD_DIR/icon_1024.png"
+  declare -a SIZES=(16 32 128 256 512)
+  for s in "${SIZES[@]}"; do
+    sips -z $s $s "$BUILD_DIR/icon_1024.png" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+    sips -z $((s*2)) $((s*2)) "$BUILD_DIR/icon_1024.png" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  cp "$BUILD_DIR/icon_1024.png" "$ICONSET/icon_512x512@2x.png"
+  iconutil -c icns "$ICONSET" -o "$RESOURCES_DIR/AppIcon.icns"
+fi
+cp "$RESOURCES_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+
+echo "==> Ad-hoc code signing (hardened runtime + entitlements)"
+codesign --force --deep --options runtime \
+  --entitlements "$RESOURCES_DIR/DittoMac.entitlements" \
+  --sign - "$APP_BUNDLE"
+echo "    signature:"
+codesign -dv "$APP_BUNDLE" 2>&1 | sed 's/^/    /' || true
+
+echo "==> Staging DMG contents (Ditto.app + /Applications link)"
+ln -s /Applications "$STAGE_DIR/Applications"
 
 echo "==> Building DMG"
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
-hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE_DIR" -ov -format UDZO \
+hdiutil create -volname "$APP_NAME" \
+  -srcfolder "$STAGE_DIR" \
+  -ov -format UDZO \
   "$DIST_DIR/Ditto-macOS.dmg"
 
 echo "==> Done: $DIST_DIR/Ditto-macOS.dmg"
+echo "    (Ad-hoc signed — to open on another Mac: right-click ▸ Open, or"
+echo "     approve in System Settings ▸ Privacy & Security.)"

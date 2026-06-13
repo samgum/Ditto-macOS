@@ -317,6 +317,33 @@ final class ClipboardStore {
         return group.name
     }
 
+    /// Full path "Parent / Child" for a group id, walking up the parent chain.
+    func groupPath(for id: Int64?) -> String? {
+        guard let id, let group = groups.first(where: { $0.id == id }) else { return nil }
+        var names = [group.name]
+        var current = group.parentId
+        while let parentId = current, let parent = groups.first(where: { $0.id == parentId }), names.contains(parent.name) == false {
+            names.insert(parent.name, at: 0)
+            current = parent.parentId
+        }
+        return names.joined(separator: " / ")
+    }
+
+    /// Groups in depth-first order with indentation depth, for tree display.
+    func hierarchicalGroups() -> [(group: ClipGroup, depth: Int)] {
+        var result: [(ClipGroup, Int)] = []
+        let byParent: [Int64?: [ClipGroup]] = Dictionary(grouping: groups) { $0.parentId }
+        func visit(_ parentId: Int64?, depth: Int) {
+            let children = (byParent[parentId] ?? []).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            for child in children {
+                result.append((child, depth))
+                visit(child.id, depth: depth + 1)
+            }
+        }
+        visit(nil, depth: 0)
+        return result
+    }
+
     // MARK: - Copy buffers
 
     func copyBuffer(for slot: Int) -> UUID? {
