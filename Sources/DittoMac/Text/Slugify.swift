@@ -106,7 +106,10 @@ enum TextTransforms {
     // MARK: - Typoglycemia
 
     /// Scramble the interior letters of each word while keeping the first and
-    /// last letter fixed (the "typoglycemia" internet meme).
+    /// last letter fixed (the "typoglycemia" internet meme). Matches the
+    /// Windows algorithm in OleClipSource.cpp: strip trailing sentence
+    /// punctuation, require the letter span to be >3, then Fisher–Yates
+    /// shuffle the interior with a real RNG.
     static func typoglycemia(_ s: String) -> String {
         let words = s.components(separatedBy: " ")
         let result = words.map { word -> String in
@@ -116,22 +119,23 @@ enum TextTransforms {
     }
 
     private static func scrambleWord(_ word: String) -> String {
-        var chars = Array(word)
-        guard chars.count > 3 else { return word }
-        let first = chars.first!
-        let last = chars.last!
-        var middle = Array(chars[1..<chars.count - 1])
-        // Fisher-Yates shuffle that ignores non-letters.
-        var indices = middle.indices.filter { middle[$0].isLetter }
-        guard indices.count > 1 else { return word }
-        // Deterministic-ish shuffle without Math.random: use a simple
-        // position-based swap so the transform is reproducible per word.
-        for i in stride(from: indices.count - 1, through: 1, by: -1) {
-            let j = (i * 7 + middle.count * 13) % (i + 1)
-            middle.swapAt(indices[i], indices[j])
-            indices = middle.indices.filter { middle[$0].isLetter }
+        let chars = Array(word)
+        guard chars.count > 1 else { return word }
+
+        // Walk back `end` over trailing sentence punctuation (. ! ?).
+        var end = chars.count
+        while end > 1, ".!?".contains(chars[end - 1]) {
+            end -= 1
         }
-        return String(first) + String(middle) + String(last)
+        guard end > 3 else { return word }
+
+        var scrambled = chars
+        // Fisher–Yates over the interior range [1, end-1).
+        for i in stride(from: 1, to: end - 1, by: 1) {
+            let newPos = Int.random(in: 1..<(end - 1))
+            scrambled.swapAt(i, newPos)
+        }
+        return String(scrambled)
     }
 
     // MARK: - Slugify

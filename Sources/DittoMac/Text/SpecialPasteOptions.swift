@@ -22,6 +22,8 @@ struct SpecialPasteOptions {
     var appendDateTime = false
     var generateGuid = false
     var pasteAsImage = false
+    var pasteImagesHorizontal = false
+    var pasteImagesVertically = false
 
     /// True if any flag is set that turns the clip into plain text only.
     var limitsFormatsToText: Bool {
@@ -56,29 +58,54 @@ struct SpecialPasteOptions {
         var stripFormatting = pasteAsPlainText
         var imageRepresentation: Data? = nil
 
+        // Mutually-exclusive text transform — mirrors Windows OleClipSource's
+        // else-if chain: exactly ONE mutation runs, in this priority order.
         if limitsFormatsToText, let sourceText = text ?? plainText(from: entry, blobReader: blobReader) {
             var transformed = sourceText
-            if removeLineFeeds { transformed = TextTransforms.removeLineFeeds(transformed) }
-            if addOneLineFeed { transformed = TextTransforms.collapseToOneLineFeed(transformed) }
-            if addTwoLineFeeds { transformed = TextTransforms.collapseToTwoLineFeeds(transformed) }
-            if upperCase { transformed = TextTransforms.upperCase(transformed) }
-            if lowerCase { transformed = TextTransforms.lowerCase(transformed) }
-            if invertCase { transformed = TextTransforms.invertCase(transformed) }
-            if capitalize { transformed = TextTransforms.capitalizeWords(transformed) }
-            if sentenceCase { transformed = TextTransforms.sentenceCase(transformed) }
-            if camelCase { transformed = TextTransforms.camelCase(transformed) }
-            if typoglycemia { transformed = TextTransforms.typoglycemia(transformed) }
-            if trimWhiteSpace { transformed = TextTransforms.trimWhitespace(transformed) }
-            if asciiOnly { transformed = TextTransforms.asciiOnly(transformed) }
-            if posixifyPaths { transformed = TextTransforms.posixifyPaths(transformed) }
-            if slugify { transformed = TextTransforms.slugify(transformed, separator: DittoSettings.slugifySeparator) }
-            if appendDateTime { transformed = TextTransforms.appendDateTime(transformed) }
+            if removeLineFeeds {
+                transformed = TextTransforms.removeLineFeeds(transformed)
+            } else if addOneLineFeed {
+                transformed = TextTransforms.collapseToOneLineFeed(transformed)
+            } else if addTwoLineFeeds {
+                transformed = TextTransforms.collapseToTwoLineFeeds(transformed)
+            } else if upperCase {
+                transformed = TextTransforms.upperCase(transformed)
+            } else if lowerCase {
+                transformed = TextTransforms.lowerCase(transformed)
+            } else if invertCase {
+                transformed = TextTransforms.invertCase(transformed)
+            } else if capitalize {
+                transformed = TextTransforms.capitalizeWords(transformed)
+            } else if sentenceCase {
+                transformed = TextTransforms.sentenceCase(transformed)
+            } else if camelCase {
+                transformed = TextTransforms.camelCase(transformed)
+            } else if typoglycemia {
+                transformed = TextTransforms.typoglycemia(transformed)
+            } else if trimWhiteSpace {
+                transformed = TextTransforms.trimWhitespace(transformed)
+            } else if asciiOnly {
+                transformed = TextTransforms.asciiOnly(transformed)
+            } else if posixifyPaths {
+                transformed = TextTransforms.posixifyPaths(transformed)
+            } else if slugify {
+                transformed = TextTransforms.slugify(transformed, separator: DittoSettings.slugifySeparator)
+            } else if appendDateTime {
+                transformed = TextTransforms.appendDateTime(transformed)
+            }
             text = transformed
             stripFormatting = true
         }
 
+        // Paste-as-image: Windows treats the clip text as an image FILE PATH
+        // and loads the image bytes; fall back to rendering the text only when
+        // it isn't a path to an existing image.
         if pasteAsImage, let finalText = text {
-            imageRepresentation = ImageTextRenderer.png(from: finalText)
+            if let imageData = ImageFileLoader.png(fromPath: finalText.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                imageRepresentation = imageData
+            } else {
+                imageRepresentation = ImageTextRenderer.png(from: finalText)
+            }
             text = nil
             stripFormatting = true
         }
@@ -125,6 +152,36 @@ enum HTMLTextExtractor {
             return nil
         }
         return attributed.string
+    }
+}
+
+/// Loads an image file from a path string and returns its PNG bytes, for the
+/// Windows-compatible "paste as image" transform (which treats the clip text
+/// as a file path).
+enum ImageFileLoader {
+    static func png(fromPath path: String) -> Data? {
+        let url: URL
+        if path.hasPrefix("/") || path.hasPrefix("~") {
+            let expanded = (path as NSString).expandingTildeInPath
+            url = URL(fileURLWithPath: expanded)
+        } else if let parsed = URL(string: path), parsed.isFileURL {
+            url = parsed
+        } else {
+            return nil
+        }
+        guard FileManager.default.fileExists(atPath: url.path),
+              let image = NSImage(contentsOf: url) else {
+            return nil
+        }
+        return NSImage.pngData(image)
+    }
+}
+
+extension NSImage {
+    static func pngData(_ image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
     }
 }
 

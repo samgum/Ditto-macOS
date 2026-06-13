@@ -251,17 +251,28 @@ final class ClipboardStore {
         persist()
     }
 
-    func moveClip(id: UUID, toTop: Bool) {
+    enum MoveDirection {
+        case up, down, top, last
+    }
+
+    func moveClip(id: UUID, direction: MoveDirection) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         let pinned = entries[index].isPinned
-        let highest = entries.filter { $0.isPinned == pinned }.map(\.clipOrder).max() ?? Date().timeIntervalSince1970
-        entries[index].clipOrder = highest + 1
+        let samePinned = entries.filter { $0.isPinned == pinned }
+        let orders = samePinned.map(\.clipOrder)
+        let highest = orders.max() ?? Date().timeIntervalSince1970
+        let lowest = orders.min() ?? Date().timeIntervalSince1970
+        switch direction {
+        case .top, .up:
+            entries[index].clipOrder = highest + 1
+        case .last, .down:
+            entries[index].clipOrder = lowest - 1
+        }
         entries.sort { lhs, rhs in
             if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
             return lhs.clipOrder > rhs.clipOrder
         }
         persist()
-        _ = toTop
     }
 
     private func repinOrdering() {

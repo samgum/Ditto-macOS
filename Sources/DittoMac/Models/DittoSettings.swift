@@ -33,6 +33,12 @@ enum DittoSettings {
         static let drawThumbnails = "Ditto.DrawThumbnail"
         static let pasteAsPlainTextByDefault = "Ditto.PasteAsPlainTextDefault"
 
+        // window chrome
+        static let alwaysOnTop = "Ditto.AlwaysOnTop"
+        static let transparencyPercent = "Ditto.TransparencyPercent"
+        static let showFirstTenText = "Ditto.ShowFirstTenText"
+        static let windowPositioning = "Ditto.WindowPositioning"
+
         // search
         static let searchDescription = "Ditto.SearchDescription"
         static let searchFullText = "Ditto.SearchFullText"
@@ -164,6 +170,36 @@ enum DittoSettings {
     static var pasteAsPlainTextByDefault: Bool {
         get { defaults.bool(forKey: Key.pasteAsPlainTextByDefault) }
         set { defaults.set(newValue, forKey: Key.pasteAsPlainTextByDefault) }
+    }
+
+    // MARK: - Window chrome
+
+    static var alwaysOnTop: Bool {
+        get { defaults.bool(forKey: Key.alwaysOnTop) }
+        set { defaults.set(newValue, forKey: Key.alwaysOnTop) }
+    }
+
+    static var transparencyPercent: Double {
+        get {
+            let stored = defaults.object(forKey: Key.transparencyPercent) as? Double ?? 0
+            return min(40, max(0, stored))
+        }
+        set { defaults.set(min(40, max(0, newValue)), forKey: Key.transparencyPercent) }
+    }
+
+    static var showFirstTenText: Bool {
+        get { defaults.bool(forKey: Key.showFirstTenText) }
+        set { defaults.set(newValue, forKey: Key.showFirstTenText) }
+    }
+
+    enum WindowPositioning: String, CaseIterable {
+        case atCursor, previousPosition
+        var title: String { self == .atCursor ? "Cursor" : "Previous" }
+    }
+
+    static var windowPositioning: WindowPositioning {
+        get { WindowPositioning(rawValue: defaults.string(forKey: Key.windowPositioning) ?? "previousPosition") ?? .previousPosition }
+        set { defaults.set(newValue.rawValue, forKey: Key.windowPositioning) }
     }
 
     // MARK: - Search

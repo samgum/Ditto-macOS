@@ -174,8 +174,14 @@ final class PreferencesWindowController: NSWindowController {
         fontSizePopup.action = #selector(fontSizeChanged)
         linesPerRowPopup.target = self
         linesPerRowPopup.action = #selector(linesPerRowChanged)
+        let alwaysOnTopButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+        let showFirstTenButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
         bindCheckbox(drawThumbnailsButton, default: DittoSettings.drawThumbnails) { DittoSettings.drawThumbnails = $0 }
         bindCheckbox(pasteAsPlainTextButton, default: DittoSettings.pasteAsPlainTextByDefault) { DittoSettings.pasteAsPlainTextByDefault = $0 }
+        bindCheckbox(alwaysOnTopButton, default: DittoSettings.alwaysOnTop) { DittoSettings.alwaysOnTop = $0 }
+        bindCheckbox(showFirstTenButton, default: DittoSettings.showFirstTenText) { DittoSettings.showFirstTenText = $0 }
+        alwaysOnTopButton.title = LocalizationManager.shared.text("always_on_top")
+        showFirstTenButton.title = LocalizationManager.shared.text("show_first_ten")
 
         openAtLoginButton.title = LocalizationManager.shared.text("open_at_login")
         playSoundButton.title = LocalizationManager.shared.text("play_sound_on_copy")
@@ -192,7 +198,9 @@ final class PreferencesWindowController: NSWindowController {
             [label(LocalizationManager.shared.text("font_size")), fontSizePopup],
             [label(LocalizationManager.shared.text("lines_per_row")), linesPerRowPopup],
             [NSView(), drawThumbnailsButton],
-            [NSView(), pasteAsPlainTextButton]
+            [NSView(), pasteAsPlainTextButton],
+            [NSView(), alwaysOnTopButton],
+            [NSView(), showFirstTenButton]
         ])
     }
 

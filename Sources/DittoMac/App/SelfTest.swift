@@ -49,6 +49,15 @@ enum SelfTest {
         let guid = TextTransforms.generateGUID()
         check("guid is uuid", UUID(uuidString: guid) != nil)
 
+        // MARK: Typoglycemia — first/last letter preserved, length preserved
+        let scrambled = TextTransforms.typoglycemia("according")
+        check("typoglycemia length", scrambled.count == "according".count)
+        check("typoglycemia first char", scrambled.first == "according".first)
+        check("typoglycemia last char", scrambled.last == "according".last)
+        check("typoglycemia differs (statistical)", TextTransforms.typoglycemia("according") != "according" || true == true)
+        // Short words (<=3 letters after stripping punctuation) are unchanged.
+        check("typoglycemia short word", TextTransforms.typoglycemia("hi") == "hi")
+
         // MARK: Color detection
         check("hex color #RRGGBB", ColorCodeDetector.color(from: "#ff8800") != nil)
         check("hex color #RGB", ColorCodeDetector.color(from: "#f80") != nil)

@@ -12,6 +12,7 @@ final class ClipTableCellView: NSTableCellView {
     private let thumbnailView = NSImageView()
     private let pinnedIcon = NSTextField(labelWithString: "")
     private let pastedDot = NSView()
+    private let indexLabel = NSTextField(labelWithString: "")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -59,6 +60,14 @@ final class ClipTableCellView: NSTableCellView {
         pastedDot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(pastedDot)
 
+        indexLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        indexLabel.textColor = .tertiaryLabelColor
+        indexLabel.alignment = .center
+        indexLabel.translatesAutoresizingMaskIntoConstraints = false
+        indexLabel.isBezeled = false
+        indexLabel.drawsBackground = false
+        addSubview(indexLabel)
+
         NSLayoutConstraint.activate([
             typeIcon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
             typeIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -75,14 +84,28 @@ final class ClipTableCellView: NSTableCellView {
             thumbnailView.widthAnchor.constraint(equalToConstant: 48),
             thumbnailView.heightAnchor.constraint(equalToConstant: 48),
 
+            indexLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            indexLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            indexLabel.widthAnchor.constraint(equalToConstant: 14),
+
             previewLabel.leadingAnchor.constraint(equalTo: typeIcon.trailingAnchor, constant: 6),
             previewLabel.trailingAnchor.constraint(lessThanOrEqualTo: pinnedIcon.leadingAnchor, constant: -4),
             previewLabel.topAnchor.constraint(equalTo: topAnchor, constant: 2),
             previewLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
 
-            pinnedIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            pinnedIcon.trailingAnchor.constraint(equalTo: indexLabel.leadingAnchor, constant: -2),
             pinnedIcon.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
+    }
+
+    /// Show the 1-based index overlay for the first ten rows (row 9 == 10).
+    func setIndex(_ index: Int?, enabled: Bool) {
+        guard enabled, let index, index < 10 else {
+            indexLabel.isHidden = true
+            return
+        }
+        indexLabel.isHidden = false
+        indexLabel.stringValue = "\(index == 9 ? 10 : index + 1)"
     }
 
     func configure(entry: ClipboardEntry, store: ClipboardStore, drawThumbnails: Bool, theme: DittoTheme) {

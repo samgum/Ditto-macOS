@@ -43,6 +43,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let countLabel = NSTextField(labelWithString: "")
+    private let previewPanel = NSTextView()
+    private let previewScroll = NSScrollView()
+    private var previewHeightConstraint: NSLayoutConstraint?
+    private var scrollViewBottomToPreviewConstraint: NSLayoutConstraint?
+    private var descriptionVisible = false
     private var filteredEntries: [ClipboardEntry] = []
     private var currentGroupFilter: GroupFilter = .all
     private var currentTypeFilter: TypeFilter = .all
@@ -76,6 +81,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         filteredEntries = store.entries
         configureContent()
         applyTheme()
+        applyWindowChrome()
 
         keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyDown(event) ?? event
@@ -176,11 +182,16 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         cell.identifier = identifier
         let theme = DittoTheme.current
         cell.configure(entry: entry, store: store, drawThumbnails: DittoSettings.drawThumbnails, theme: theme)
+        cell.setIndex(row, enabled: DittoSettings.showFirstTenText)
         return cell
     }
 
     func tableView(_ tableView: NSTableView, rowHeight row: Int) -> CGFloat {
         DittoSettings.drawThumbnails && filteredEntries[safe: row]?.isImage == true ? 56 : 28
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        updatePreview()
     }
 
     private func configureLabelCell(_ cell: NSTableCellView, text: String) {
@@ -306,7 +317,25 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     @objc private func moveToTopSelectedEntry() {
         guard let entry = currentEntry else { return }
-        store.moveClip(id: entry.id, toTop: true)
+        store.moveClip(id: entry.id, direction: .top)
+        refresh()
+    }
+
+    @objc private func moveUpSelectedEntry() {
+        guard let entry = currentEntry else { return }
+        store.moveClip(id: entry.id, direction: .up)
+        refresh()
+    }
+
+    @objc private func moveDownSelectedEntry() {
+        guard let entry = currentEntry else { return }
+        store.moveClip(id: entry.id, direction: .down)
+        refresh()
+    }
+
+    @objc private func moveLastSelectedEntry() {
+        guard let entry = currentEntry else { return }
+        store.moveClip(id: entry.id, direction: .last)
         refresh()
     }
 
@@ -417,6 +446,20 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         delegate?.compareEntries(entries)
     }
 
+    @objc private func pasteMultiImages(_ sender: NSMenuItem) {
+        let horizontal = sender.tag == 1
+        let images = selectedEntries.compactMap { entry -> NSImage? in
+            guard let key = entry.imageBlobKey, let data = store.blobData(named: key) else { return nil }
+            return NSImage(data: data)
+        }
+        guard images.count >= 2, let combined = ImageCompositor.combine(images: images, horizontal: horizontal) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setData(NSImage.pngData(combined), forType: .png)
+        for entry in selectedEntries { store.markPasted(entry) }
+        pasteHandler()
+    }
+
     @objc private func copyToBuffer(_ sender: NSMenuItem) {
         guard let entry = currentEntry, let slot = sender.representedObject as? NSNumber else { return }
         delegate?.copyEntryToBuffer(entry, slot: slot.intValue)
@@ -487,11 +530,51 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         favItem.state = (currentEntry?.favorite == true) ? .on : .off
         menu.addItem(favItem)
 
-        let topItem = NSMenuItem(title: LocalizationManager.shared.text("move_to_group").replacingOccurrences(of: "Group", with: "Top"), action: #selector(moveToTopSelectedEntry), keyEquivalent: "")
+        let topItem = NSMenuItem(title: LocalizationManager.shared.text("move_top"), action: #selector(moveToTopSelectedEntry), keyEquivalent: "")
         topItem.target = self
         menu.addItem(topItem)
 
+        let moveSubmenuItem = NSMenuItem(title: "…", action: nil, keyEquivalent: "")
+        let moveSubmenu = NSMenu()
+        let upItem = NSMenuItem(title: LocalizationManager.shared.text("move_up"), action: #selector(moveUpSelectedEntry), keyEquivalent: "")
+        upItem.target = self
+        let downItem = NSMenuItem(title: LocalizationManager.shared.text("move_down"), action: #selector(moveDownSelectedEntry), keyEquivalent: "")
+        downItem.target = self
+        let lastItem = NSMenuItem(title: LocalizationManager.shared.text("move_last"), action: #selector(moveLastSelectedEntry), keyEquivalent: "")
+        lastItem.target = self
+        moveSubmenu.addItem(upItem)
+        moveSubmenu.addItem(downItem)
+        moveSubmenu.addItem(lastItem)
+        moveSubmenuItem.submenu = moveSubmenu
+        moveSubmenuItem.title = LocalizationManager.shared.text("move_top").components(separatedBy: " to ").first ?? "Move"
+        menu.addItem(moveSubmenuItem)
+
         menu.addItem(.separator())
+
+        // View submenu: always-on-top, transparency, description pane.
+        let viewSubmenuItem = NSMenuItem(title: LocalizationManager.shared.text("appearance"), action: nil, keyEquivalent: "")
+        let viewSubmenu = NSMenu()
+        let onTopItem = NSMenuItem(title: LocalizationManager.shared.text("always_on_top"), action: #selector(toggleAlwaysOnTop), keyEquivalent: "")
+        onTopItem.target = self
+        onTopItem.state = DittoSettings.alwaysOnTop ? .on : .off
+        viewSubmenu.addItem(onTopItem)
+        let transItem = NSMenuItem(title: LocalizationManager.shared.text("transparency"), action: #selector(toggleTransparency), keyEquivalent: "")
+        transItem.target = self
+        transItem.state = DittoSettings.transparencyPercent > 0 ? .on : .off
+        viewSubmenu.addItem(transItem)
+        let transUpItem = NSMenuItem(title: LocalizationManager.shared.text("transparency") + " +", action: #selector(increaseTransparency), keyEquivalent: "")
+        transUpItem.target = self
+        viewSubmenu.addItem(transUpItem)
+        let transDownItem = NSMenuItem(title: LocalizationManager.shared.text("transparency") + " −", action: #selector(decreaseTransparency), keyEquivalent: "")
+        transDownItem.target = self
+        viewSubmenu.addItem(transDownItem)
+        viewSubmenu.addItem(.separator())
+        let descItem = NSMenuItem(title: LocalizationManager.shared.text("description_pane"), action: #selector(toggleDescription), keyEquivalent: "")
+        descItem.target = self
+        descItem.state = descriptionVisible ? .on : .off
+        viewSubmenu.addItem(descItem)
+        viewSubmenuItem.submenu = viewSubmenu
+        menu.addItem(viewSubmenuItem)
 
         let qrItem = NSMenuItem(title: LocalizationManager.shared.text("qr_code"), action: #selector(showQRCode), keyEquivalent: "")
         qrItem.target = self
@@ -526,6 +609,18 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             let compareItem = NSMenuItem(title: LocalizationManager.shared.text("compare_clips"), action: #selector(compareSelected), keyEquivalent: "")
             compareItem.target = self
             menu.addItem(compareItem)
+
+            let imageEntries = selectedEntries.filter { $0.isImage }
+            if imageEntries.count >= 2 {
+                let hItem = NSMenuItem(title: LocalizationManager.shared.text("multi_paste") + " (→)", action: #selector(pasteMultiImages(_:)), keyEquivalent: "")
+                hItem.target = self
+                hItem.tag = 1
+                menu.addItem(hItem)
+                let vItem = NSMenuItem(title: LocalizationManager.shared.text("multi_paste") + " (↓)", action: #selector(pasteMultiImages(_:)), keyEquivalent: "")
+                vItem.target = self
+                vItem.tag = 0
+                menu.addItem(vItem)
+            }
         }
 
         menu.addItem(.separator())
@@ -630,6 +725,23 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             }
         }
 
+        // F3 toggles the description/preview pane (matches Windows default).
+        if Int(event.keyCode) == kVK_F3 {
+            toggleDescription()
+            return nil
+        }
+
+        // Ctrl/Control + Up/Down/Home/End move the clip in the list.
+        if modifiers == .control {
+            switch Int(event.keyCode) {
+            case kVK_UpArrow: moveUpSelectedEntry(); return nil
+            case kVK_DownArrow: moveDownSelectedEntry(); return nil
+            case kVK_Home: moveToTopSelectedEntry(); return nil
+            case kVK_End: moveLastSelectedEntry(); return nil
+            default: break
+            }
+        }
+
         if window?.firstResponder is NSTextView, searchField.currentEditor() != nil {
             if Int(event.keyCode) == kVK_Escape {
                 window?.makeFirstResponder(tableView)
@@ -720,6 +832,16 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         scrollView.documentView = tableView
 
+        previewPanel.isEditable = false
+        previewPanel.drawsBackground = false
+        previewPanel.font = NSFont.systemFont(ofSize: CGFloat(DittoSettings.fontSize))
+        previewPanel.textContainerInset = NSSize(width: 8, height: 6)
+        previewScroll.documentView = previewPanel
+        previewScroll.hasVerticalScroller = true
+        previewScroll.translatesAutoresizingMaskIntoConstraints = false
+        previewScroll.wantsLayer = true
+        previewScroll.layer?.backgroundColor = DittoTheme.current.listBoxEvenRowBackground.cgColor
+
         countLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         countLabel.textColor = DittoTheme.current.captionText
         countLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -732,9 +854,17 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         root.addSubview(typeFilterPopup)
         root.addSubview(groupFilterPopup)
         root.addSubview(scrollView)
+        root.addSubview(previewScroll)
         root.addSubview(toolbar)
         root.addSubview(countLabel)
         window.contentView = root
+
+        let previewHeight = previewScroll.heightAnchor.constraint(equalToConstant: 0)
+        previewHeight.priority = .required
+        previewHeightConstraint = previewHeight
+
+        let scrollViewBottom = scrollView.bottomAnchor.constraint(equalTo: previewScroll.topAnchor, constant: descriptionVisible ? -4 : 0)
+        scrollViewBottomToPreviewConstraint = scrollViewBottom
 
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
@@ -756,7 +886,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 12),
             scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: toolbar.topAnchor, constant: -10),
+            scrollViewBottom,
+
+            previewScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            previewScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            previewScroll.bottomAnchor.constraint(equalTo: toolbar.topAnchor, constant: -10),
+            previewHeight,
 
             countLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
             countLabel.bottomAnchor.constraint(equalTo: scrollView.topAnchor, constant: -2),
@@ -765,6 +900,55 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             toolbar.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12)
         ])
+    }
+
+    // MARK: - Window chrome (always-on-top, transparency, positioning)
+
+    private func applyWindowChrome() {
+        guard let window else { return }
+        window.level = DittoSettings.alwaysOnTop ? .floating : .normal
+        window.alphaValue = CGFloat(1.0 - DittoSettings.transparencyPercent / 100.0)
+    }
+
+    @objc private func toggleAlwaysOnTop() {
+        DittoSettings.alwaysOnTop.toggle()
+        applyWindowChrome()
+    }
+
+    @objc private func toggleTransparency() {
+        if DittoSettings.transparencyPercent > 0 {
+            DittoSettings.transparencyPercent = 0
+        } else {
+            DittoSettings.transparencyPercent = 14
+        }
+        applyWindowChrome()
+    }
+
+    @objc private func increaseTransparency() {
+        DittoSettings.transparencyPercent = min(40, DittoSettings.transparencyPercent + 5)
+        applyWindowChrome()
+    }
+
+    @objc private func decreaseTransparency() {
+        DittoSettings.transparencyPercent = max(0, DittoSettings.transparencyPercent - 5)
+        applyWindowChrome()
+    }
+
+    @objc private func toggleDescription() {
+        descriptionVisible.toggle()
+        previewHeightConstraint?.constant = descriptionVisible ? 160 : 0
+        scrollViewBottomToPreviewConstraint?.constant = descriptionVisible ? -4 : 0
+        updatePreview()
+    }
+
+    private func updatePreview() {
+        guard descriptionVisible else { return }
+        let entry = currentEntry
+        if let imageBlobKey = entry?.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
+            previewPanel.string = "[\(entry?.typeLabel ?? "Image")] \(data.count) bytes"
+        } else {
+            previewPanel.string = entry?.text ?? store.fullText(for: entry ?? ClipboardEntry()) ?? ""
+        }
     }
 
     private func makeToolbar() -> NSView {
