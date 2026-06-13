@@ -1,6 +1,10 @@
 # Ditto for macOS
 
+[English](README.md) · [简体中文](README.zh-CN.md)
+
 A native macOS reimplementation of [Ditto](https://github.com/sabrogden/Ditto), the Windows clipboard manager.
+
+**Author: 伤感咩吖** · Forked from `samgum/Ditto`
 
 Ditto saves everything you copy to the clipboard — text, rich text, HTML, images, and files — into a searchable, persistent history you can recall and paste at any time. This project is a from-scratch Swift/AppKit port that reproduces the Windows application's feature set on macOS.
 
@@ -85,3 +89,7 @@ Sources/DittoMac/
 ## License
 
 GPL-3.0, inherited from the upstream Ditto project.
+
+---
+
+> Author: **伤感咩吖** · This is an independent macOS port maintained in this repository. The original Windows Ditto is © its respective authors under GPL-3.0.

@@ -55,6 +55,14 @@ final class ClipboardMonitor {
             return
         }
 
+        // Honour the Windows/macOS exclusion markers: apps that place these
+        // hint types on the pasteboard signal "do not record this."
+        for excludeType in ClipboardMonitor.excludeFormatTypes {
+            if pasteboard.types?.contains(excludeType) == true {
+                return
+            }
+        }
+
         guard DittoSettings.shouldCapture(bundleId: bundleId) else { return }
 
         let text = pasteboard.string(forType: .string)
@@ -93,4 +101,16 @@ final class ClipboardMonitor {
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [NSURL]
         return urls?.map { $0 as URL } ?? []
     }
+
+    /// Pasteboard types that signal "do not record this clip" — the macOS
+    /// equivalent of the Windows `Clipboard Viewer Ignore` /
+    /// `ExcludeClipboardContentFromMonitorProcessing` registered formats.
+    /// Also honours the Windows 10 `CanIncludeInClipboardHistory`=false hint.
+    static let excludeFormatTypes: [NSPasteboard.PasteboardType] = [
+        NSPasteboard.PasteboardType("org.nspasteboard.TransientType"),
+        NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"),
+        NSPasteboard.PasteboardType("Clipboard Viewer Ignore"),
+        NSPasteboard.PasteboardType("ExcludeClipboardContentFromMonitorProcessing"),
+        NSPasteboard.PasteboardType("MicrosoftEdge Clipboard Format")
+    ]
 }

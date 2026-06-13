@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & test (macOS)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Swift
+        run: swift --version
+
+      - name: Build (debug)
+        run: swift build
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Run headless self-test
+        run: swift run DittoMac --selftest
+
+  package:
+    name: Package DMG
+    runs-on: macos-14
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build release binary
+        run: swift build -c release
+
+      - name: Stage .app bundle
+        run: |
+          mkdir -p Ditto.app/Contents/MacOS
+          mkdir -p Ditto.app/Contents/Resources
+          cp .build/release/DittoMac Ditto.app/Contents/MacOS/Ditto
+          cp Resources/Info.plist Ditto.app/Contents/Info.plist
+          cp -R Sources/DittoMac/Localizations Ditto.app/Contents/Resources/Localizations
+          printf 'APPL????' > Ditto.app/Contents/PkgInfo
+
+      - name: Ad-hoc code sign
+        run: codesign --force --deep --sign - Ditto.app
+
+      - name: Build DMG
+        run: |
+          mkdir -p dist
+          hdiutil create -volname Ditto -srcfolder Ditto.app -ov -format UDZO dist/Ditto-macOS.dmg
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ditto-macOS
+          path: dist/Ditto-macOS.dmg
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Ditto-macOS.dmg

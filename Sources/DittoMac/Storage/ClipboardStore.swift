@@ -86,6 +86,7 @@ final class ClipboardStore {
             imageBlobKey: imageBlobKey,
             fileURLs: files.isEmpty ? nil : files,
             createdAt: Date(),
+            crc: CRC32.checksum(Data((normalizedText ?? "").utf8)),
             sourceApp: sourceApp
         )
 

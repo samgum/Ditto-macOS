@@ -33,6 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Single-instance guard: if another Ditto is already running, activate
+        // it and quit this one (the LaunchAgent / login item can otherwise
+        // spawn duplicates).
+        if isAlreadyRunning() {
+            NSApp.terminate(nil)
+            return
+        }
+
         NSApp.setActivationPolicy(.accessory)
         ProcessInfo.processInfo.disableAutomaticTermination("Ditto monitors the clipboard from the menu bar.")
 
@@ -65,6 +73,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    /// True if another DittoMac process is already running (excluding self).
+    private func isAlreadyRunning() -> Bool {
+        let selfPID = ProcessInfo.processInfo.processIdentifier
+        let ownName = "DittoMac"
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+        for app in apps {
+            if app.processIdentifier != selfPID {
+                app.activate(options: [.activateIgnoringOtherApps])
+                return true
+            }
+        }
+        // Also catch the bare-executable case (swift run): match by name.
+        for app in NSWorkspace.shared.runningApplications where app.activationPolicy != .regular {
+            if let name = app.localizedName, name.contains(ownName), app.processIdentifier != selfPID {
+                app.activate(options: [.activateIgnoringOtherApps])
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: - Theme
