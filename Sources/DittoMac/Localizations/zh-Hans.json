@@ -145,5 +145,20 @@
   "global": "全局",
   "last_pasted": "上次粘贴",
   "source_app": "来源应用",
-  "never": "从未"
+  "never": "从未",
+  "move_up": "上移",
+  "move_down": "下移",
+  "move_top": "移到最前",
+  "move_last": "移到最后",
+  "always_on_top": "窗口置顶",
+  "transparency": "透明度",
+  "description_pane": "描述预览面板",
+  "show_first_ten": "显示前十序号",
+  "positioning": "窗口位置",
+  "restore_clipboard_after_paste": "粘贴后恢复原剪贴板",
+  "capture_into_buffer": "把当前剪贴板存入…",
+  "accessibility_required_title": "需要授权辅助功能才能粘贴",
+  "accessibility_required_body": "Ditto 通过模拟 ⌘V 把内容粘进其它 App,这需要你在「系统设置 ▸ 隐私与安全性 ▸ 辅助功能」里启用 Ditto。剪贴项已复制——你可以先手动按 ⌘V,然后授权,之后 Ditto 就能自动粘贴了。",
+  "open_system_settings": "打开系统设置",
+  "show_save_notification": "保存剪贴项时显示通知"
 }

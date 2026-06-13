@@ -16,6 +16,13 @@ final class MacClipboardDatabase {
     private var database: OpaquePointer?
     private(set) var schemaVersion: Int = 0
 
+    /// Serializes ALL sqlite access. A single `sqlite3*` connection must not
+    /// be used concurrently from multiple threads (it corrupts internal state
+    /// and SIGSEGVs — seen when an image capture persisted on a background
+    /// queue while the main thread read entries). Recursive so that
+    /// `transaction → execute → query` nesting on the same thread is safe.
+    private let lock = NSRecursiveLock()
+
     static let currentSchemaVersion = 3
 
     init(url: URL, useWAL: Bool = true, readOnly: Bool = false) throws {
@@ -531,6 +538,8 @@ final class MacClipboardDatabase {
     // MARK: - SQL helpers
 
     private func transaction(_ body: () throws -> Void) throws {
+        lock.lock()
+        defer { lock.unlock() }
         try execute("BEGIN IMMEDIATE TRANSACTION")
         do {
             try body()
@@ -558,6 +567,8 @@ final class MacClipboardDatabase {
         binds: ((OpaquePointer?) -> Void)? = nil,
         body: (OpaquePointer?) throws -> T
     ) throws -> T {
+        lock.lock()
+        defer { lock.unlock() }
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
             let message = database.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? sql
