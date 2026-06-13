@@ -69,6 +69,12 @@ Produces `dist/Ditto-macOS.dmg` containing `Ditto.app` and an `/Applications` sh
 
 macOS requires granting Ditto **Accessibility** permission (System Settings ▸ Privacy & Security ▸ Accessibility) so it can simulate the paste keystroke. Network sync may prompt for **Local Network** permission.
 
+## Known limitations
+
+- **LAN sync is macOS↔macOS.** Clip exchange between two machines running this port works (AES-256-GCM over TCP on port 23443). Interop with a *Windows* Ditto peer is not yet implemented — it would require reproducing the Windows binary `CSendInfo` packet layout and the KeePass-style AES-256-CBC key-derivation exactly. Tracked for a future release.
+- The app is **ad-hoc signed** (no Apple Developer ID). A downloaded build must be opened via right-click ▸ Open, or approved once in System Settings ▸ Privacy & Security.
+
+
 ## Architecture
 
 ```
