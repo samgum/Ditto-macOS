@@ -216,9 +216,10 @@ final class SyncCoordinator {
         guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { return nil }
         defer { freeifaddrs(firstAddr) }
 
-        var cursor = firstAddr
+        var cursor: UnsafeMutablePointer<ifaddrs>? = firstAddr
         while cursor != nil {
-            let interface = cursor.pointee
+            guard let current = cursor else { break }
+            let interface = current.pointee
             cursor = interface.ifa_next
             let addrFamily = interface.ifa_addr?.pointee.sa_family
             if addrFamily == UInt8(AF_INET) {

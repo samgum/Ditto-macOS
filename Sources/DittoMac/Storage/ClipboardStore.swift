@@ -51,10 +51,11 @@ final class ClipboardStore {
         // Enforce max clip size (0 = unlimited).
         let maxSize = DittoSettings.maxClipSizeBytes
         if maxSize > 0 {
-            let totalSize = (normalizedText?.utf8.count ?? 0)
-                + (rtfData?.count ?? 0)
-                + (htmlData?.count ?? 0)
-                + (imageData?.count ?? 0)
+            let textSize = normalizedText?.utf8.count ?? 0
+            let rtfSize = rtfData?.count ?? 0
+            let htmlSize = htmlData?.count ?? 0
+            let imageSize = imageData?.count ?? 0
+            let totalSize = textSize + rtfSize + htmlSize + imageSize
             if totalSize > maxSize {
                 return
             }
