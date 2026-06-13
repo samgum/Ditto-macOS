@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             self?.rebuildStatusMenuIfNeeded()
             if let entry = self?.store.entries.first {
                 self?.syncCoordinator.broadcast(entry: entry)
+                SaveNotifier.shared.show(entry.preview)
             }
         }
         monitor.start()
@@ -435,10 +436,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
         let target = activeAppTracker.previousApplication
         if PasteSimulator.hasAccessibilityPermission == false {
+            warnAccessibilityOnce()
             PasteSimulator.promptForAccessibility()
+            // Still attempt the paste; if the user just granted it, it works.
         }
         Statistics.shared.recordPaste()
         PasteSimulator.paste(into: target)
+    }
+
+    private var accessibilityWarned = false
+    private func warnAccessibilityOnce() {
+        guard accessibilityWarned == false else { return }
+        accessibilityWarned = true
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = LocalizationManager.shared.text("accessibility_required_title")
+            alert.informativeText = LocalizationManager.shared.text("accessibility_required_body")
+            alert.addButton(withTitle: LocalizationManager.shared.text("open_system_settings"))
+            alert.addButton(withTitle: LocalizationManager.shared.text("close"))
+            if alert.runModal() == .alertFirstButtonReturn {
+                PasteSimulator.promptForAccessibility()
+            }
+        }
     }
 
     // MARK: - Quit
@@ -474,9 +493,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     @objc private func copyRecentMenuItem(_ sender: NSMenuItem) {
         guard let idString = sender.representedObject as? String,
-              let id = UUID(uuidString: idString),
-              let entry = store.entry(id: id) else { return }
-        store.copyToPasteboard(entry)
+              let id = UUID(uuidString: idString) else { return }
+        // From the tray menu, selecting a recent item PASTES it into the
+        // previous application (matches Windows behaviour), not just copy.
+        pasteSpecificClip(id: id)
+    }
+
+    @objc private func pasteBufferFromMenu(_ sender: NSMenuItem) {
+        guard let slot = sender.representedObject as? NSNumber else { return }
+        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
+        guard let entry = copyBufferManager.paste(slot: slot.intValue) else { return }
+        store.markPasted(entry)
+        Statistics.shared.recordPaste()
+        pasteToPreviousApplication()
+        if let snapshot { ClipboardSaveRestore.restore(snapshot) }
+    }
+
+    @objc private func captureIntoBufferFromMenu(_ sender: NSMenuItem) {
+        guard let slot = sender.representedObject as? NSNumber else { return }
+        copyBufferManager.captureCurrentClipboard(into: slot.intValue)
     }
 
     private func rebuildStatusMenuIfNeeded() {
@@ -508,6 +543,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         _ = groupsItem
         let friendsItem = addItem(menu, title: LocalizationManager.shared.text("friends"), action: #selector(showFriends), key: "")
         _ = friendsItem
+
+        // Copy Buffers submenu — paste from a numbered slot without a hot key.
+        let bufferItem = NSMenuItem(title: LocalizationManager.shared.text("copy_buffers"), action: nil, keyEquivalent: "")
+        let bufferSubmenu = NSMenu()
+        for slot in 1...CopyBufferManager.slotCount {
+            let preview: String
+            if let entry = copyBufferManager.entry(in: slot) {
+                preview = entry.preview.isEmpty ? LocalizationManager.shared.text("copy_buffer_empty") : entry.preview
+            } else {
+                preview = LocalizationManager.shared.text("copy_buffer_empty")
+            }
+            let truncated = preview.count > 32 ? String(preview.prefix(32)) + "…" : preview
+            let pasteSlot = NSMenuItem(title: "\(slot)  \(truncated)", action: #selector(pasteBufferFromMenu(_:)), keyEquivalent: "")
+            pasteSlot.target = self
+            pasteSlot.representedObject = NSNumber(value: slot)
+            bufferSubmenu.addItem(pasteSlot)
+        }
+        bufferSubmenu.addItem(.separator())
+        let captureSlot = NSMenuItem(title: LocalizationManager.shared.text("capture_into_buffer"), action: nil, keyEquivalent: "")
+        let captureSubmenu = NSMenu()
+        for slot in 1...CopyBufferManager.slotCount {
+            let item = NSMenuItem(title: "\(LocalizationManager.shared.text("copy_buffer_slot")) \(slot)", action: #selector(captureIntoBufferFromMenu(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: slot)
+            captureSubmenu.addItem(item)
+        }
+        captureSlot.submenu = captureSubmenu
+        bufferSubmenu.addItem(captureSlot)
+        bufferItem.submenu = bufferSubmenu
+        menu.addItem(bufferItem)
 
         menu.addItem(.separator())
 

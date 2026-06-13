@@ -120,6 +120,11 @@ enum DittoSettings {
         set { defaults.set(newValue, forKey: "Ditto.RestoreClipboardAfterPaste") }
     }
 
+    static var showSaveNotification: Bool {
+        get { defaults.bool(forKey: "Ditto.ShowSaveNotification") }
+        set { defaults.set(newValue, forKey: "Ditto.ShowSaveNotification") }
+    }
+
     static var refreshAfterPaste: Bool {
         get { defaults.object(forKey: "Ditto.RefreshViewAfterPasting") == nil ? true : defaults.bool(forKey: "Ditto.RefreshViewAfterPasting") }
         set { defaults.set(newValue, forKey: "Ditto.RefreshViewAfterPasting") }

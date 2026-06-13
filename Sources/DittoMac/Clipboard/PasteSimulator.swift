@@ -19,14 +19,36 @@ enum PasteSimulator {
     }
 
     /// Activate a specific app and paste into it.
-    static func paste(into app: NSRunningApplication?, afterDelay seconds: TimeInterval = 0.15) {
-        app?.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+    static func paste(into app: NSRunningApplication?, afterDelay seconds: TimeInterval = 0.18) {
+        // Bring the target forward first; if no target is known, at least make
+        // sure Ditto itself isn't the frontmost (it can't receive a paste).
+        if let app {
+            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            waitForFrontmost(app, timeout: 0.45)
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
             postCommandV()
         }
     }
 
+    /// Poll briefly until `app` is actually frontmost before posting the
+    /// keystroke — activating is asynchronous and posting too early lands the
+    /// paste in the wrong window.
+    static func waitForFrontmost(_ app: NSRunningApplication, timeout: TimeInterval) {
+        let start = Date()
+        while Date().timeIntervalSince(start) < timeout {
+            if app.isFinishedLaunching == false { Thread.sleep(forTimeInterval: 0.02); continue }
+            // isHidden / isActive reflect activation state reasonably well.
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier { return }
+            Thread.sleep(forTimeInterval: 0.03)
+        }
+    }
+
     static func postCommandV() {
+        guard hasAccessibilityPermission else {
+            NSLog("[Ditto] paste skipped — Accessibility permission not granted")
+            return
+        }
         let source = CGEventSource(stateID: .combinedSessionState)
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)
