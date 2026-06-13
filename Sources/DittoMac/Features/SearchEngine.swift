@@ -41,14 +41,11 @@ struct SearchEngine {
         case .fullTextOnly:
             return matchString(fullTextProvider(entry) ?? entry.text ?? "")
         case .defaultTargets:
-            var haystack = ""
-            if DittoSettings.searchDescription { haystack += (entry.text ?? "") + "\n" }
-            if DittoSettings.searchQuickPaste { haystack += (entry.quickPasteText ?? "") + "\n" }
-            if DittoSettings.searchFullText { haystack += (fullTextProvider(entry) ?? "") + "\n" }
-            if haystack.isEmpty {
-                // No target enabled — fall back to the description text.
-                haystack = entry.text ?? ""
-            }
+            var parts: [String] = []
+            if DittoSettings.searchDescription, let text = entry.text { parts.append(text) }
+            if DittoSettings.searchQuickPaste, let qpt = entry.quickPasteText { parts.append(qpt) }
+            if DittoSettings.searchFullText { parts.append(fullTextProvider(entry) ?? "") }
+            let haystack = parts.isEmpty ? (entry.text ?? "") : parts.joined(separator: "\n")
             return matchString(haystack)
         }
     }
@@ -70,9 +67,15 @@ struct SearchEngine {
         case .contains:
             return value.range(of: trimmed, options: caseSensitive ? [] : [.caseInsensitive, .diacriticInsensitive]) != nil
         case .wildcard:
-            let pattern = "^" + NSRegularExpression.escapedPattern(for: trimmed)
-                .replacingOccurrences(of: "\\*", with: ".*")
-                .replacingOccurrences(of: "\\?", with: ".") + "$"
+            var pattern = "^"
+            for char in trimmed {
+                switch char {
+                case "*": pattern += ".*"
+                case "?": pattern += "."
+                default: pattern += NSRegularExpression.escapedPattern(for: String(char))
+                }
+            }
+            pattern += "$"
             let options: NSString.CompareOptions = caseSensitive ? [.regularExpression] : [.regularExpression, .caseInsensitive]
             return value.range(of: pattern, options: options) != nil
         case .regex:
