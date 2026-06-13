@@ -746,6 +746,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             return nil
         }
 
+        // Alt+Enter opens clip properties (Windows CLIP_PROPERTIES).
+        if modifiers == .option, Int(event.keyCode) == kVK_Return {
+            showProperties()
+            return nil
+        }
+
         // F3 toggles the description/preview pane (matches Windows default).
         if Int(event.keyCode) == kVK_F3 {
             toggleDescription()
