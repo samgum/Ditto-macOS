@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     private let syncCoordinator = SyncCoordinator()
 
     private var mainHotKeyId: UInt32?
+    private var perClipHotKeyIds: [UInt32: UUID] = [:]
+    private var firstTenHotKeyIds: [UInt32: Int] = [:]
 
     override init() {
         copyBufferManager = CopyBufferManager(store: store)
@@ -146,12 +148,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             mainHotKeyId = controller.register(hotKey: choice)
         }
         registerCopyBufferHotKeys(controller: controller)
+        registerPerClipHotKeys(controller: controller)
+        registerFirstTenHotKeys(controller: controller)
         hotKeyController = controller
     }
 
     private func handleHotKey(id: UInt32) {
         if id == mainHotKeyId {
             showHistory()
+            return
+        }
+        if let entryId = perClipHotKeyIds[id] {
+            pasteSpecificClip(id: entryId)
+            return
+        }
+        if let position = firstTenHotKeyIds[id] {
+            pastePosition(position)
             return
         }
         // Copy-buffer hot keys.
@@ -168,6 +180,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
     }
 
+    /// Paste the Nth entry (1-based, first ten) into the previous app.
+    private func pastePosition(_ position: Int) {
+        let index = position - 1
+        guard let entry = store.entries[safe: index] else { return }
+        pasteSpecificClip(id: entry.id)
+    }
+
+    private func pasteSpecificClip(id: UUID) {
+        guard let entry = store.entry(id: id) else { return }
+        store.copyToPasteboard(entry)
+        store.markPasted(entry)
+        Statistics.shared.recordPaste()
+        if DittoSettings.hideDittoOnPaste {
+            historyWindowController?.window?.orderOut(nil)
+        }
+        let target = activeAppTracker.previousApplication
+        if PasteSimulator.hasAccessibilityPermission == false {
+            PasteSimulator.promptForAccessibility()
+        }
+        PasteSimulator.paste(into: target)
+    }
+
     private var copyBufferHotKeyIds: [UInt32: (Int, Bool)] = [:]
 
     private func registerCopyBufferHotKeys(controller: HotKeyController) {
@@ -179,6 +213,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             if let pasteKey = slotKeys.pasteKey, let id = controller.register(hotKey: pasteKey) {
                 copyBufferHotKeyIds[id] = (slot, true)
             }
+        }
+    }
+
+    /// Register a global hot key for every clip that has shortcutKey > 0 and
+    /// the global flag set (Windows `lShortCut` + `globalShortCut`).
+    private func registerPerClipHotKeys(controller: HotKeyController) {
+        perClipHotKeyIds.removeAll()
+        for entry in store.entries where entry.shortcutKey > 0 && entry.shortcutGlobal {
+            // shortcutKey stores a HotKey.encoded Int64.
+            guard let hotKey = HotKey.decode(Int64(entry.shortcutKey)) else { continue }
+            if let id = controller.register(hotKey: hotKey) {
+                perClipHotKeyIds[id] = entry.id
+            }
+        }
+    }
+
+    /// Register the global first-ten paste hot keys (positions 1–10).
+    private func registerFirstTenHotKeys(controller: HotKeyController) {
+        firstTenHotKeyIds.removeAll()
+        for (index, hotKey) in DittoSettings.firstTenGlobalHotKeys.enumerated() {
+            guard let hotKey, let id = controller.register(hotKey: hotKey) else { continue }
+            firstTenHotKeyIds[id] = index + 1
         }
     }
 
@@ -261,12 +317,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     private func reregisterHotKeys() {
         hotKeyController?.unregisterAll()
         copyBufferHotKeyIds.removeAll()
+        perClipHotKeyIds.removeAll()
+        firstTenHotKeyIds.removeAll()
         mainHotKeyId = nil
         guard let controller = hotKeyController else { return }
         if let choice = HotKeyChoice.currentChoice.hotKey {
             mainHotKeyId = controller.register(hotKey: choice)
         }
         registerCopyBufferHotKeys(controller: controller)
+        registerPerClipHotKeys(controller: controller)
+        registerFirstTenHotKeys(controller: controller)
     }
 
     // MARK: - Import / Export

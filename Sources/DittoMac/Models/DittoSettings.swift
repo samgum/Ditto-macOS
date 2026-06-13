@@ -202,6 +202,26 @@ enum DittoSettings {
         set { defaults.set(newValue.rawValue, forKey: Key.windowPositioning) }
     }
 
+    /// The 10 global "paste position N" hot keys (1-based). Stored as the
+    /// `HotKey.encoded` Int64; `nil` means unassigned (disabled), matching the
+    /// Windows default for the first-ten paste accelerators.
+    static var firstTenGlobalHotKeys: [HotKey?] {
+        get {
+            let stored = defaults.array(forKey: "Ditto.FirstTenHotKeys") as? [Int64] ?? []
+            var result: [HotKey?] = Array(repeating: nil, count: 10)
+            for index in 0..<10 {
+                if index < stored.count, let hotKey = HotKey.decode(stored[index]) {
+                    result[index] = hotKey
+                }
+            }
+            return result
+        }
+        set {
+            let raw = newValue.map { $0?.encoded ?? 0 }
+            defaults.set(raw, forKey: "Ditto.FirstTenHotKeys")
+        }
+    }
+
     // MARK: - Search
 
     static var searchDescription: Bool {

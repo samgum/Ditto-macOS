@@ -13,6 +13,19 @@ struct HotKey: Codable, Equatable, Hashable {
 
     var isEnabled: Bool { modifiers != 0 }
 
+    /// Pack into a single Int64 so a per-clip hot key can live in the
+    /// `shortcutKey` INTEGER column the way Windows stores `lShortCut`.
+    var encoded: Int64 {
+        (Int64(modifiers) << 32) | Int64(keyCode)
+    }
+
+    static func decode(_ value: Int64) -> HotKey? {
+        let mods = UInt32(value >> 32)
+        let keyCode = UInt32(value & 0xffffffff)
+        guard mods != 0 else { return nil }
+        return HotKey(keyCode: keyCode, modifiers: mods)
+    }
+
     /// Carbon modifier flags → a readable ⌥⌃⇧⌘ description.
     var displayString: String {
         var parts: [String] = []

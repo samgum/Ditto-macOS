@@ -20,6 +20,8 @@ struct ClipboardEntry: Codable, Equatable {
     var clipOrder: Double
     var shortcutKey: Int
     var shortcutGlobal: Bool
+    var moveToGroupShortcut: Int64
+    var globalMoveToGroup: Bool
     var crc: Int64?
     var sourceApp: String?
     var pasteCount: Int
@@ -40,6 +42,8 @@ struct ClipboardEntry: Codable, Equatable {
         clipOrder: Double = Date().timeIntervalSince1970,
         shortcutKey: Int = 0,
         shortcutGlobal: Bool = false,
+        moveToGroupShortcut: Int64 = 0,
+        globalMoveToGroup: Bool = false,
         crc: Int64? = nil,
         sourceApp: String? = nil,
         pasteCount: Int = 0,
@@ -59,6 +63,8 @@ struct ClipboardEntry: Codable, Equatable {
         self.clipOrder = clipOrder
         self.shortcutKey = shortcutKey
         self.shortcutGlobal = shortcutGlobal
+        self.moveToGroupShortcut = moveToGroupShortcut
+        self.globalMoveToGroup = globalMoveToGroup
         self.crc = crc
         self.sourceApp = sourceApp
         self.pasteCount = pasteCount

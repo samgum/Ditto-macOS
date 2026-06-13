@@ -16,7 +16,7 @@ final class MacClipboardDatabase {
     private var database: OpaquePointer?
     private(set) var schemaVersion: Int = 0
 
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     init(url: URL, useWAL: Bool = true, readOnly: Bool = false) throws {
         if readOnly == false {
@@ -65,6 +65,8 @@ final class MacClipboardDatabase {
                 clipOrder REAL DEFAULT 0,
                 shortcutKey INTEGER DEFAULT 0,
                 shortcutGlobal INTEGER DEFAULT 0,
+                moveToGroupShortcut INTEGER DEFAULT 0,
+                globalMoveToGroup INTEGER DEFAULT 0,
                 crc INTEGER,
                 sourceApp TEXT,
                 pasteCount INTEGER DEFAULT 0,
@@ -137,38 +139,9 @@ final class MacClipboardDatabase {
             // Backfill clipOrder for legacy rows that have none.
             try execute("UPDATE ClipboardEntries SET clipOrder = createdAt WHERE clipOrder IS NULL OR clipOrder = 0")
         }
-        if schemaVersion < 2 {
-            try execute(
-                """
-                CREATE TABLE IF NOT EXISTS Groups(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    parentId INTEGER,
-                    sortOrder REAL DEFAULT 0,
-                    createdAt REAL NOT NULL
-                )
-                """
-            )
-            try execute(
-                """
-                CREATE TABLE IF NOT EXISTS CopyBuffers(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    bufferNumber INTEGER NOT NULL,
-                    entryId TEXT
-                )
-                """
-            )
-            try execute(
-                """
-                CREATE TABLE IF NOT EXISTS Friends(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    ipAddress TEXT NOT NULL,
-                    port INTEGER NOT NULL DEFAULT 23443,
-                    sendAll INTEGER NOT NULL DEFAULT 0
-                )
-                """
-            )
+        if schemaVersion < 3 {
+            addColumnIfMissing(table: "ClipboardEntries", column: "moveToGroupShortcut", type: "INTEGER DEFAULT 0")
+            addColumnIfMissing(table: "ClipboardEntries", column: "globalMoveToGroup", type: "INTEGER DEFAULT 0")
         }
         setUserVersion(Self.currentSchemaVersion)
         schemaVersion = Self.currentSchemaVersion
@@ -213,7 +186,8 @@ final class MacClipboardDatabase {
             """
             SELECT id, text, rtfBlobKey, htmlBlobKey, imageBlobKey, fileURLsJson,
                    createdAt, lastPasteDate, isFavorite, neverAutoDelete, quickPasteText,
-                   clipOrder, shortcutKey, shortcutGlobal, crc, sourceApp, pasteCount, groupId
+                   clipOrder, shortcutKey, shortcutGlobal, moveToGroupShortcut, globalMoveToGroup,
+                   crc, sourceApp, pasteCount, groupId
             FROM ClipboardEntries
             ORDER BY neverAutoDelete DESC, isFavorite DESC, clipOrder DESC, createdAt DESC
             """
@@ -241,10 +215,12 @@ final class MacClipboardDatabase {
                         clipOrder: sqlite3_column_double(statement, 11),
                         shortcutKey: Int(sqlite3_column_int(statement, 12)),
                         shortcutGlobal: sqlite3_column_int(statement, 13) != 0,
-                        crc: Self.optionalInt64(statement, 14),
-                        sourceApp: Self.optionalString(statement, 15),
-                        pasteCount: Int(sqlite3_column_int(statement, 16)),
-                        groupId: Self.optionalInt64(statement, 17)
+                        moveToGroupShortcut: Self.optionalInt64(statement, 14) ?? 0,
+                        globalMoveToGroup: sqlite3_column_int(statement, 15) != 0,
+                        crc: Self.optionalInt64(statement, 16),
+                        sourceApp: Self.optionalString(statement, 17),
+                        pasteCount: Int(sqlite3_column_int(statement, 18)),
+                        groupId: Self.optionalInt64(statement, 19)
                     )
                 )
             }
@@ -271,9 +247,10 @@ final class MacClipboardDatabase {
             INSERT INTO ClipboardEntries(
                 id, text, rtfBlobKey, htmlBlobKey, imageBlobKey, fileURLsJson,
                 createdAt, lastPasteDate, isFavorite, neverAutoDelete, quickPasteText,
-                clipOrder, shortcutKey, shortcutGlobal, crc, sourceApp, pasteCount, groupId
+                clipOrder, shortcutKey, shortcutGlobal, moveToGroupShortcut, globalMoveToGroup,
+                crc, sourceApp, pasteCount, groupId
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 text=excluded.text,
                 rtfBlobKey=excluded.rtfBlobKey,
@@ -288,6 +265,8 @@ final class MacClipboardDatabase {
                 clipOrder=excluded.clipOrder,
                 shortcutKey=excluded.shortcutKey,
                 shortcutGlobal=excluded.shortcutGlobal,
+                moveToGroupShortcut=excluded.moveToGroupShortcut,
+                globalMoveToGroup=excluded.globalMoveToGroup,
                 crc=excluded.crc,
                 sourceApp=excluded.sourceApp,
                 pasteCount=excluded.pasteCount,
@@ -308,10 +287,12 @@ final class MacClipboardDatabase {
                 sqlite3_bind_double(statement, 12, entry.clipOrder)
                 sqlite3_bind_int(statement, 13, Int32(entry.shortcutKey))
                 sqlite3_bind_int(statement, 14, entry.shortcutGlobal ? 1 : 0)
-                Self.bindOptionalInt64(statement, 15, entry.crc)
-                self.bindOptionalText(statement, 16, entry.sourceApp)
-                sqlite3_bind_int(statement, 17, Int32(entry.pasteCount))
-                Self.bindOptionalInt64(statement, 18, entry.groupId)
+                sqlite3_bind_int64(statement, 15, entry.moveToGroupShortcut)
+                sqlite3_bind_int(statement, 16, entry.globalMoveToGroup ? 1 : 0)
+                Self.bindOptionalInt64(statement, 17, entry.crc)
+                self.bindOptionalText(statement, 18, entry.sourceApp)
+                sqlite3_bind_int(statement, 19, Int32(entry.pasteCount))
+                Self.bindOptionalInt64(statement, 20, entry.groupId)
             }
         )
     }

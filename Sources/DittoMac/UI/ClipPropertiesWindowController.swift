@@ -13,6 +13,11 @@ final class ClipPropertiesWindowController: NSWindowController {
     private let quickPasteField = NSTextField()
     private let neverAutoDeleteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let favoriteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let shortcutDisplay = NSTextField(labelWithString: "")
+    private let shortcutRecordButton = NSButton(title: "", target: nil, action: nil)
+    private let shortcutClearButton = NSButton(title: "", target: nil, action: nil)
+    private let shortcutGlobalButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private var recordedHotKey: HotKey?
     private let groupPopup = NSPopUpButton()
     private let infoLabel = NSTextField(labelWithString: "")
     private let saveButton = NSButton(title: "", target: nil, action: nil)
@@ -92,6 +97,7 @@ final class ClipPropertiesWindowController: NSWindowController {
             [label(LocalizationManager.shared.text("group")), groupPopup],
             [NSView(), favoriteButton],
             [NSView(), neverAutoDeleteButton],
+            [label(LocalizationManager.shared.text("shortcut_key")), shortcutRow()],
             [label(LocalizationManager.shared.text("type")), formatsScroll]
         ])
         grid.column(at: 0).xPlacement = .trailing
@@ -131,6 +137,53 @@ final class ClipPropertiesWindowController: NSWindowController {
         return field
     }
 
+    private func shortcutRow() -> NSView {
+        shortcutDisplay.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        shortcutRecordButton.title = LocalizationManager.shared.text("record_hot_key")
+        shortcutRecordButton.bezelStyle = .rounded
+        shortcutRecordButton.target = self
+        shortcutRecordButton.action = #selector(recordShortcut)
+        shortcutClearButton.title = LocalizationManager.shared.text("clear")
+        shortcutClearButton.bezelStyle = .rounded
+        shortcutClearButton.target = self
+        shortcutClearButton.action = #selector(clearShortcut)
+        shortcutGlobalButton.title = LocalizationManager.shared.text("global")
+        shortcutGlobalButton.target = self
+        shortcutGlobalButton.action = #selector(toggleChanged)
+        let stack = NSStackView(views: [shortcutDisplay, shortcutRecordButton, shortcutClearButton, shortcutGlobalButton])
+        stack.orientation = .horizontal
+        stack.spacing = 6
+        return stack
+    }
+
+    @objc private func recordShortcut() {
+        HotKeyRecorder.record { [weak self] hotKey in
+            guard let self else { return }
+            self.recordedHotKey = hotKey
+            self.shortcutDisplay.stringValue = hotKey?.displayString ?? ""
+            self.applyShortcut()
+        }
+    }
+
+    @objc private func clearShortcut() {
+        recordedHotKey = nil
+        shortcutDisplay.stringValue = ""
+        applyShortcut()
+    }
+
+    private func applyShortcut() {
+        shortcutGlobalButton.isEnabled = recordedHotKey != nil
+        if let hotKey = recordedHotKey {
+            entry.shortcutKey = Int(hotKey.encoded)
+            entry.shortcutGlobal = shortcutGlobalButton.state == .on
+        } else {
+            entry.shortcutKey = 0
+            entry.shortcutGlobal = false
+        }
+        store.update(entry)
+        onChanged()
+    }
+
     private func populate() {
         descriptionField.string = entry.text ?? ""
         quickPasteField.stringValue = entry.quickPasteText ?? ""
@@ -138,6 +191,12 @@ final class ClipPropertiesWindowController: NSWindowController {
         favoriteButton.state = entry.favorite ? .on : .off
         neverAutoDeleteButton.title = LocalizationManager.shared.text("never_auto_delete")
         neverAutoDeleteButton.state = entry.neverAutoDelete ? .on : .off
+
+        recordedHotKey = entry.shortcutKey > 0 ? HotKey.decode(Int64(entry.shortcutKey)) : nil
+        shortcutDisplay.stringValue = recordedHotKey?.displayString ?? ""
+        shortcutGlobalButton.title = LocalizationManager.shared.text("global")
+        shortcutGlobalButton.state = entry.shortcutGlobal ? .on : .off
+        shortcutGlobalButton.isEnabled = recordedHotKey != nil
 
         groupPopup.removeAllItems()
         groupPopup.addItem(withTitle: LocalizationManager.shared.text("ungrouped"))
