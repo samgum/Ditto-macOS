@@ -136,6 +136,7 @@
   "accent_color": "强调色",
   "about": "关于 Ditto",
   "version": "版本",
+  "about_body": "Ditto for macOS\n版本 %@\n\n作者：伤感咩吖\nDitto 剪贴板管理器的原生 macOS 移植版。\nhttps://github.com/samgum/Ditto-macOS",
   "new_clip": "新建剪贴项",
   "compare_clips": "比较剪贴项",
   "select_left": "选为左侧",

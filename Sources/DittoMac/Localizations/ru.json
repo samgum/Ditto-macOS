@@ -136,6 +136,7 @@
   "accent_color": "Акцентный цвет",
   "about": "О Ditto",
   "version": "Версия",
+  "about_body": "Ditto для macOS\nВерсия %@\n\nАвтор: 伤感咩吖\nНативный порт менеджера буфера обмена Ditto для macOS.\nhttps://github.com/samgum/Ditto-macOS",
   "new_clip": "Новый элемент",
   "compare_clips": "Сравнить элементы",
   "select_left": "Выбрать левым",

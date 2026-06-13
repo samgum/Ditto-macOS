@@ -204,6 +204,7 @@ final class LocalizationManager {
         "accent_color": "Accent Color",
         "about": "About Ditto",
         "version": "Version",
+        "about_body": "Ditto for macOS\nVersion %@\n\nAuthor: 伤感咩吖\nA native macOS port of the Ditto clipboard manager.\nhttps://github.com/samgum/Ditto-macOS",
         "new_clip": "New Clip",
         "move_up": "Move Up",
         "move_down": "Move Down",

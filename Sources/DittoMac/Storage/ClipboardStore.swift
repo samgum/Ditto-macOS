@@ -13,13 +13,13 @@ final class ClipboardStore {
 
     private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.store", qos: .userInitiated)
 
-    init() {
+    init(databaseURL: URL? = nil) {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let directory = appSupport.appendingPathComponent("Ditto", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         legacyFileURL = directory.appendingPathComponent("history.json")
         legacyDataDirectory = directory.appendingPathComponent("Data", isDirectory: true)
-        database = try! MacClipboardDatabase(url: directory.appendingPathComponent("Ditto.db"))
+        database = try! MacClipboardDatabase(url: databaseURL ?? directory.appendingPathComponent("Ditto.db"))
         load()
         migrateLegacyJSONIfNeeded()
         enforceExpiry()

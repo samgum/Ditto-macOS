@@ -136,6 +136,7 @@
   "accent_color": "Cor de destaque",
   "about": "Sobre o Ditto",
   "version": "Versão",
+  "about_body": "Ditto para macOS\nVersão %@\n\nAutor: 伤感咩吖\nPorte nativo para macOS do gerenciador de área de transferência Ditto.\nhttps://github.com/samgum/Ditto-macOS",
   "new_clip": "Novo item",
   "compare_clips": "Comparar itens",
   "select_left": "Selecionar como esquerdo",

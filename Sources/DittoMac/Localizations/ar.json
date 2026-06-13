@@ -136,6 +136,7 @@
   "accent_color": "لون التمييز",
   "about": "حول Ditto",
   "version": "الإصدار",
+  "about_body": "Ditto لنظام macOS\nالإصدار %@\n\nالمؤلف: 伤感咩吖\nنسخة macOS الأصلية من مدير الحافظة Ditto.\nhttps://github.com/samgum/Ditto-macOS",
   "new_clip": "عنصر جديد",
   "compare_clips": "مقارنة العناصر",
   "select_left": "تحديد كأيسر",

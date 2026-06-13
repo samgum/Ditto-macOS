@@ -337,7 +337,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("about")
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-        alert.informativeText = "Ditto for macOS\n" + LocalizationManager.shared.text("version") + " \(version)\n\nA native macOS port of Ditto, the clipboard manager.\nhttps://github.com/samgum/Ditto-macOS"
+        alert.informativeText = String(
+            format: LocalizationManager.shared.text("about_body"),
+            version
+        )
         alert.alertStyle = .informational
         alert.runModal()
     }
