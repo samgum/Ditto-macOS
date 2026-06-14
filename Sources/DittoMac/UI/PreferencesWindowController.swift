@@ -625,10 +625,30 @@ final class PreferencesWindowController: NSWindowController {
         databaseChooseButton.target = self
         databaseChooseButton.action = #selector(chooseDatabaseLocation)
         databaseChooseButton.translatesAutoresizingMaskIntoConstraints = false
-        let stack = NSStackView(views: [databasePathField, databaseChooseButton])
+
+        let backupBtn = NSButton(title: LocalizationManager.shared.text("backup_database"), target: self, action: #selector(backupDatabaseFromPrefs))
+        backupBtn.bezelStyle = .rounded
+        let compactBtn = NSButton(title: LocalizationManager.shared.text("compact_database"), target: self, action: #selector(compactDatabaseFromPrefs))
+        compactBtn.bezelStyle = .rounded
+
+        let stack = NSStackView(views: [databasePathField, databaseChooseButton, backupBtn, compactBtn])
         stack.orientation = .horizontal
         stack.spacing = 8
         return stack
+    }
+
+    @objc private func backupDatabaseFromPrefs() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
+        panel.nameFieldStringValue = "Ditto-Backup.db"
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            try? self?.store.backupDatabase(to: url)
+        }
+    }
+
+    @objc private func compactDatabaseFromPrefs() {
+        store.compactDatabase()
     }
 
     @objc private func chooseDatabaseLocation() {
