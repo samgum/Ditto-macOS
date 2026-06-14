@@ -25,7 +25,7 @@ final class ClipboardSaveRestore {
         return Snapshot(changeCount: pasteboard.changeCount, items: items)
     }
 
-    static func restore(_ snapshot: Snapshot, afterDelay delay: TimeInterval = 0.75) {
+    static func restore(_ snapshot: Snapshot, afterDelay delay: TimeInterval = 1.2) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let pasteboard = NSPasteboard.general
             // Only restore if the clipboard hasn't been changed by the user

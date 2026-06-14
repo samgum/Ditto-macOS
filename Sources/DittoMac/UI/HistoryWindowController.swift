@@ -20,7 +20,7 @@ protocol HistoryWindowDelegate: AnyObject {
     func copyEntryToBuffer(_ entry: ClipboardEntry, slot: Int)
 }
 
-final class HistoryWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
+final class HistoryWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSMenuDelegate {
     private enum GroupFilter: Equatable {
         case all
         case favorites
@@ -79,7 +79,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         window.minSize = NSSize(width: 560, height: 360)
 
         super.init(window: window)
-        filteredEntries = store.entries
+        filteredEntries = store.snapshotEntries()
         configureContent()
         applyTheme()
         applyWindowChrome()
@@ -117,7 +117,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     private func applySearch() {
         let engine = SearchEngine(mode: searchMode, query: searchField.stringValue)
-        filteredEntries = store.entries.filter { entry in
+        filteredEntries = store.snapshotEntries().filter { entry in
             let matchesGroup: Bool
             switch currentGroupFilter {
             case .all: matchesGroup = true
@@ -143,7 +143,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             return matchesGroup && matchesType && matchesSearch
         }
         tableView.reloadData()
-        countLabel.stringValue = "\(filteredEntries.count) / \(store.entries.count)"
+        countLabel.stringValue = "\(filteredEntries.count) / \(store.snapshotEntries().count)"
     }
 
     private func fullText(for entry: ClipboardEntry) -> String? {
@@ -376,12 +376,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             if name.isEmpty {
                 store.setGroup(id: entry.id, groupId: nil)
             } else {
-                let existing = store.groups.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+                let existing = store.snapshotGroups().first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
                 if let existing {
                     store.setGroup(id: entry.id, groupId: existing.id)
                 } else {
                     store.addGroup(name: name)
-                    if let created = store.groups.first(where: { $0.name == name }) {
+                    if let created = store.snapshotGroups().first(where: { $0.name == name }) {
                         store.setGroup(id: entry.id, groupId: created.id)
                     }
                 }
@@ -485,10 +485,15 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     // MARK: - Context menu
 
-    func tableView(_ tableView: NSTableView, menuForTableColumn column: NSTableColumn?, row: Int) -> NSMenu? {
-        guard filteredEntries.indices.contains(row) else { return nil }
-        tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        return buildContextMenu()
+    /// NSTableView has no per-row menu delegate; the right pattern is to give
+    /// the table a menu whose NSMenuDelegate rebuilds it from `clickedRow`
+    /// just before it opens.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let row = tableView.clickedRow
+        if row >= 0, filteredEntries.indices.contains(row) {
+            tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        menu.items = buildContextMenu().items
     }
 
     private func buildContextMenu() -> NSMenu {
@@ -683,7 +688,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         none.tag = -1
         submenu.addItem(none)
         submenu.addItem(.separator())
-        for group in store.groups {
+        for group in store.snapshotGroups() {
             let item = NSMenuItem(title: group.name, action: #selector(setGroupForSelectedEntry(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = NSNumber(value: group.id)
@@ -847,7 +852,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         tableView.dataSource = self
         tableView.target = self
         tableView.doubleAction = #selector(pasteSelectedEntry)
-        tableView.menu = nil // built per-row via delegate
+        tableView.menu = NSMenu()
+        tableView.menu?.delegate = self
 
         let clipColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("clip"))
         clipColumn.title = LocalizationManager.shared.text("clip")

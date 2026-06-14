@@ -13,6 +13,25 @@ final class ClipboardStore {
 
     private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.store", qos: .userInitiated)
 
+    /// Serializes ALL access to `entries` / `groups`. The in-memory arrays are
+    /// mutated on background threads (clipboard poll queue, sync queue) while
+    /// the main thread iterates them for the table — a concurrent insert/sort
+    /// during iteration is a data race that EXC_BAD_ACCESSes (same bug class as
+    /// the sqlite connection). Recursive so nested internal calls are safe.
+    private let lock = NSRecursiveLock()
+
+    /// A copy of the entries for off-thread readers (Array is COW, so this is
+    /// a cheap snapshot taken under the lock).
+    func snapshotEntries() -> [ClipboardEntry] {
+        lock.lock(); defer { lock.unlock() }
+        return entries
+    }
+
+    func snapshotGroups() -> [ClipGroup] {
+        lock.lock(); defer { lock.unlock() }
+        return groups
+    }
+
     init(databaseURL: URL? = nil) {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let directory = appSupport.appendingPathComponent("Ditto", isDirectory: true)
@@ -35,6 +54,7 @@ final class ClipboardStore {
         fileURLs: [URL],
         sourceApp: String? = nil
     ) {
+        lock.lock(); defer { lock.unlock() }
         let normalizedText = text?.trimmingCharacters(in: .whitespacesAndNewlines)
         let files = fileURLs.map { $0.path }
 
@@ -101,10 +121,12 @@ final class ClipboardStore {
     // MARK: - Lookups
 
     func entry(id: UUID) -> ClipboardEntry? {
-        entries.first { $0.id == id }
+        lock.lock(); defer { lock.unlock() }
+        return entries.first { $0.id == id }
     }
 
     func update(_ entry: ClipboardEntry) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
         entries[index] = entry
         persist()
@@ -115,6 +137,7 @@ final class ClipboardStore {
     /// Insert a brand-new empty clip and return it (used by "New Clip").
     @discardableResult
     func createNewClip(text: String = "") -> ClipboardEntry {
+        lock.lock(); defer { lock.unlock() }
         let entry = ClipboardEntry(text: text.isEmpty ? nil : text, neverAutoDelete: true)
         entries.insert(entry, at: 0)
         persist()
@@ -199,6 +222,7 @@ final class ClipboardStore {
     }
 
     func markPasted(_ entry: ClipboardEntry) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
         var updated = entries[index]
         updated.pasteCount += 1
@@ -219,11 +243,13 @@ final class ClipboardStore {
     // MARK: - Mutation
 
     func removeEntry(id: UUID) {
+        lock.lock(); defer { lock.unlock() }
         removeEntries { $0.id == id }
         persist()
     }
 
     func toggleFavorite(id: UUID) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].isFavorite = !(entries[index].isFavorite ?? false)
         repinOrdering()
@@ -231,6 +257,7 @@ final class ClipboardStore {
     }
 
     func toggleNeverAutoDelete(id: UUID) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].neverAutoDelete.toggle()
         repinOrdering()
@@ -244,12 +271,14 @@ final class ClipboardStore {
     }
 
     func setQuickPasteText(id: UUID, text: String?) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].quickPasteText = text?.trimmingCharacters(in: .whitespacesAndNewlines)
         persist()
     }
 
     func setShortcut(id: UUID, shortcutKey: Int, global: Bool) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].shortcutKey = shortcutKey
         entries[index].shortcutGlobal = global
@@ -290,6 +319,7 @@ final class ClipboardStore {
     // MARK: - Groups
 
     func addGroup(name: String, parentId: Int64? = nil) {
+        lock.lock(); defer { lock.unlock() }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return }
         let group = ClipGroup(name: trimmed, parentId: parentId)
@@ -303,12 +333,14 @@ final class ClipboardStore {
     }
 
     func renameGroup(id: Int64, name: String) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = groups.firstIndex(where: { $0.id == id }) else { return }
         groups[index].name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         try? database.updateGroup(groups[index])
     }
 
     func deleteGroup(id: Int64) {
+        lock.lock(); defer { lock.unlock() }
         try? database.deleteGroup(id: id)
         groups.removeAll { $0.id == id }
         for index in entries.indices where entries[index].groupId == id {
@@ -356,6 +388,7 @@ final class ClipboardStore {
     }
 
     func setCopyBuffer(slot: Int, entryId: UUID?) {
+        lock.lock(); defer { lock.unlock() }
         try? database.setCopyBuffer(slot, entryId: entryId)
     }
 
@@ -402,6 +435,7 @@ final class ClipboardStore {
     }
 
     private func mergeImportedEntries(_ importedEntries: [ClipboardEntry]) {
+        lock.lock(); defer { lock.unlock() }
         let importedKeys = Set(importedEntries.map(importKey(for:)))
         removeEntries { importedKeys.contains(importKey(for: $0)) }
         entries = (importedEntries + entries).sorted { lhs, rhs in
@@ -426,16 +460,19 @@ final class ClipboardStore {
     // MARK: - Maintenance
 
     func removeAll() {
+        lock.lock(); defer { lock.unlock() }
         entries.removeAll()
         try? database.removeAll()
     }
 
     func enforceLimit() {
+        lock.lock(); defer { lock.unlock() }
         trim()
         persist()
     }
 
     func enforceExpiry() {
+        lock.lock(); defer { lock.unlock() }
         guard DittoSettings.checkExpiredEntries else { return }
         let cutoff = Date().addingTimeInterval(-TimeInterval(DittoSettings.expiredEntriesDays) * 86_400)
         let expired = entries.filter { $0.createdAt < cutoff && $0.isPinned == false }
@@ -508,8 +545,12 @@ final class ClipboardStore {
     }
 
     private func persist() {
+        // Snapshot under the lock so the background write is consistent and
+        // can't race a concurrent mutation.
+        lock.lock()
         let snapshot = entries
         let snapshotGroups = groups
+        lock.unlock()
         queue.async { [database] in
             try? database.replaceEntries(snapshot)
             for group in snapshotGroups {

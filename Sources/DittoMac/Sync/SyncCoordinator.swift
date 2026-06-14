@@ -62,6 +62,16 @@ final class SyncCoordinator {
 
     private func handle(connection: NWConnection) {
         incomingConnections.append(connection)
+        // Remove (and cancel) the connection when it ends, so we don't leak
+        // sockets over the lifetime of the server.
+        connection.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .cancelled, .failed:
+                self?.incomingConnections.removeAll { $0 === connection }
+            default:
+                break
+            }
+        }
         connection.start(queue: queue)
         receiveMessage(on: connection)
     }

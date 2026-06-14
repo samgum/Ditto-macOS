@@ -50,7 +50,7 @@ final class CopyBufferManager {
             fileURLs: fileURLs,
             sourceApp: "Copy Buffer \(slot)"
         )
-        if let entry = store.entries.first {
+        if let entry = store.snapshotEntries().first {
             store.setCopyBuffer(slot: slot, entryId: entry.id)
         }
     }

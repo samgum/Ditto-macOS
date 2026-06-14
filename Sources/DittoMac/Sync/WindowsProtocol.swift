@@ -16,10 +16,11 @@ enum WindowsProtocol {
         case start = 0, data = 1, dataStart = 2, dataEnd = 3, end = 4, exit = 5, requestFiles = 6
     }
 
-    /// The on-wire header. Total 376 bytes (matches Windows `sizeof(CSendInfo)`
-    /// with default packing: fields + the 2-byte pad before m_lParameter1 +
-    /// 1-byte pad before m_respondPort + trailing pad to 8-byte alignment).
-    static let sendInfoSize = 376
+    /// The on-wire header. 375 bytes with the field layout + the two inline
+    /// pads (2 before m_lParameter1, 1 before m_respondPort). m_nSize is
+    /// written to match the actual emitted byte count so the codec is
+    /// self-consistent.
+    static let sendInfoSize = 375
 
     struct SendInfo {
         var type: MessageType

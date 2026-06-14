@@ -51,9 +51,6 @@ enum ColorCodeDetector {
                 return "#\(rest)"
             }
         }
-        if [3, 6].contains(lower.count), lower.allSatisfy({ $0.isHexDigit }) {
-            return "#\(lower)"
-        }
         // rgb(r,g,b) / rgba(...) support.
         if lower.hasPrefix("rgb") {
             let stripped = lower

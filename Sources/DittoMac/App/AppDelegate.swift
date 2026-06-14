@@ -81,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             Statistics.shared.recordCopy()
             self?.historyWindowController?.refresh()
             self?.rebuildStatusMenuIfNeeded()
-            if let entry = self?.store.entries.first {
+            if let entry = self?.store.snapshotEntries().first {
                 self?.syncCoordinator.broadcast(entry: entry)
                 SaveNotifier.shared.show(entry.preview)
             }
@@ -106,22 +106,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     /// True if another DittoMac process is already running (excluding self).
+    /// Only matches by bundle identifier — a name-substring fallback matched
+    /// unrelated menu-bar apps and killed legit launches.
     private func isAlreadyRunning() -> Bool {
+        guard let bundleId = Bundle.main.bundleIdentifier else { return false }
         let selfPID = ProcessInfo.processInfo.processIdentifier
-        let ownName = "DittoMac"
-        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
-        for app in apps {
-            if app.processIdentifier != selfPID {
-                app.activate(options: [.activateIgnoringOtherApps])
-                return true
-            }
-        }
-        // Also catch the bare-executable case (swift run): match by name.
-        for app in NSWorkspace.shared.runningApplications where app.activationPolicy != .regular {
-            if let name = app.localizedName, name.contains(ownName), app.processIdentifier != selfPID {
-                app.activate(options: [.activateIgnoringOtherApps])
-                return true
-            }
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+        for app in apps where app.processIdentifier != selfPID {
+            app.activate(options: [.activateIgnoringOtherApps])
+            return true
         }
         return false
     }
@@ -197,10 +190,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         // Copy-buffer hot keys.
         if let (slot, isPaste) = copyBufferHotKeyIds[id] {
             if isPaste {
+                let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
                 if let entry = copyBufferManager.paste(slot: slot) {
                     store.markPasted(entry)
-                    Statistics.shared.recordPaste()
-                    PasteSimulator.paste()
+                    pasteToPreviousApplication()
+                    if let snapshot { ClipboardSaveRestore.restore(snapshot) }
                 }
             } else {
                 copyBufferManager.captureCurrentClipboard(into: slot)
@@ -211,7 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     /// Paste the Nth entry (1-based, first ten) into the previous app.
     private func pastePosition(_ position: Int) {
         let index = position - 1
-        guard let entry = store.entries[safe: index] else { return }
+        guard let entry = store.snapshotEntries()[safe: index] else { return }
         pasteSpecificClip(id: entry.id)
     }
 
@@ -248,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     /// the global flag set (Windows `lShortCut` + `globalShortCut`).
     private func registerPerClipHotKeys(controller: HotKeyController) {
         perClipHotKeyIds.removeAll()
-        for entry in store.entries where entry.shortcutKey > 0 && entry.shortcutGlobal {
+        for entry in store.snapshotEntries() where entry.shortcutKey > 0 && entry.shortcutGlobal {
             // shortcutKey stores a HotKey.encoded Int64.
             guard let hotKey = HotKey.decode(Int64(entry.shortcutKey)) else { continue }
             if let id = controller.register(hotKey: hotKey) {
@@ -491,7 +485,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         guard let entry = copyBufferManager.paste(slot: slot.intValue) else { return }
         store.markPasted(entry)
-        Statistics.shared.recordPaste()
+        // pasteToPreviousApplication() already records the paste stat — don't
+        // double-count it here.
         pasteToPreviousApplication()
         if let snapshot { ClipboardSaveRestore.restore(snapshot) }
     }
@@ -567,7 +562,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         addItem(menu, title: LocalizationManager.shared.text("import_windows_database"), action: #selector(importWindowsDatabase), key: "")
         addItem(menu, title: LocalizationManager.shared.text("export_history"), action: #selector(exportHistory), key: "")
 
-        let recentEntries = Array(store.entries.prefix(10))
+        let recentEntries = Array(store.snapshotEntries().prefix(10))
         if recentEntries.isEmpty == false {
             menu.addItem(.separator())
         }

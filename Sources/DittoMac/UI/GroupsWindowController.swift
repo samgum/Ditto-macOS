@@ -95,10 +95,10 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
 
     func refresh() { tableView.reloadData() }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { store.groups.count }
+    func numberOfRows(in tableView: NSTableView) -> Int { store.snapshotGroups().count }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let group = store.groups[safe: row] else { return nil }
+        guard let group = store.snapshotGroups()[safe: row] else { return nil }
         let cell = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("name"), owner: self) as? NSTableCellView ?? NSTableCellView()
         let label = cell.textField ?? NSTextField(labelWithString: "")
         label.stringValue = group.name
@@ -126,7 +126,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
 
     @objc private func renameGroup() {
         let row = tableView.selectedRow
-        guard let group = store.groups[safe: row] else { return }
+        guard let group = store.snapshotGroups()[safe: row] else { return }
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("group_name")
         alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
@@ -143,7 +143,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
 
     @objc private func deleteGroup() {
         let row = tableView.selectedRow
-        guard let group = store.groups[safe: row] else { return }
+        guard let group = store.snapshotGroups()[safe: row] else { return }
         store.deleteGroup(id: group.id)
         onChanged()
         refresh()

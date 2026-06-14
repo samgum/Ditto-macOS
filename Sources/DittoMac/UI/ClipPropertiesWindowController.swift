@@ -201,7 +201,7 @@ final class ClipPropertiesWindowController: NSWindowController {
         groupPopup.removeAllItems()
         groupPopup.addItem(withTitle: LocalizationManager.shared.text("ungrouped"))
         var selectedIndex = 0
-        for (index, group) in store.groups.enumerated() {
+        for (index, group) in store.snapshotGroups().enumerated() {
             groupPopup.addItem(withTitle: group.name)
             if entry.groupId == group.id { selectedIndex = index + 1 }
         }
@@ -247,7 +247,7 @@ final class ClipPropertiesWindowController: NSWindowController {
             entry.groupId = nil
         } else {
             let index = groupPopup.indexOfSelectedItem - 1
-            entry.groupId = store.groups[safe: index]?.id
+            entry.groupId = store.snapshotGroups()[safe: index]?.id
         }
         store.update(entry)
         onChanged()
