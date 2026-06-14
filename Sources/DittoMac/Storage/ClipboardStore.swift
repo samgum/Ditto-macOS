@@ -366,16 +366,17 @@ final class ClipboardStore {
     }
 
     func groupName(for id: Int64?) -> String? {
-        guard let id, let group = groups.first(where: { $0.id == id }) else { return nil }
+        guard let id, let group = snapshotGroups().first(where: { $0.id == id }) else { return nil }
         return group.name
     }
 
     /// Full path "Parent / Child" for a group id, walking up the parent chain.
     func groupPath(for id: Int64?) -> String? {
-        guard let id, let group = groups.first(where: { $0.id == id }) else { return nil }
+        let snapshot = snapshotGroups()
+        guard let id, let group = snapshot.first(where: { $0.id == id }) else { return nil }
         var names = [group.name]
         var current = group.parentId
-        while let parentId = current, let parent = groups.first(where: { $0.id == parentId }), names.contains(parent.name) == false {
+        while let parentId = current, let parent = snapshot.first(where: { $0.id == parentId }), names.contains(parent.name) == false {
             names.insert(parent.name, at: 0)
             current = parent.parentId
         }
@@ -384,8 +385,9 @@ final class ClipboardStore {
 
     /// Groups in depth-first order with indentation depth, for tree display.
     func hierarchicalGroups() -> [(group: ClipGroup, depth: Int)] {
+        let snapshot = snapshotGroups()
         var result: [(ClipGroup, Int)] = []
-        let byParent: [Int64?: [ClipGroup]] = Dictionary(grouping: groups) { $0.parentId }
+        let byParent: [Int64?: [ClipGroup]] = Dictionary(grouping: snapshot) { $0.parentId }
         func visit(_ parentId: Int64?, depth: Int) {
             let children = (byParent[parentId] ?? []).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             for child in children {

@@ -55,7 +55,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private var filteredEntries: [ClipboardEntry] = []
     private var currentGroupFilter: GroupFilter = .all
     private var currentTypeFilter: TypeFilter = .all
-    private var searchMode: SearchMode = .contains
+    private var searchMode: SearchMode = DittoSettings.regexSearch ? .regex : .contains
     private var lastSearchQuery = ""
     private var keyEventMonitor: Any?
     private var themeObserver: NSObjectProtocol?
@@ -279,6 +279,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     @objc private func copySelectedEntry() {
         guard let entry = currentEntry else { return }
         store.copyToPasteboard(entry)
+        // Advance the monitor past this write so Ditto doesn't re-capture the
+        // clip it just placed (same fix as the paste paths).
+        syncMonitor?()
     }
 
     @objc private func pasteSelectedEntry() {
@@ -303,6 +306,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     @objc private func pasteSpecialNoPaste(_ sender: NSMenuItem) {
         guard let entry = currentEntry, let box = sender.representedObject as? SpecialPasteOptionsBox else { return }
         store.copyToPasteboard(entry, options: box.options)
+        syncMonitor?()
     }
 
     @objc private func deleteSelectedEntry() {
@@ -732,6 +736,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
                     store.copyToPasteboard(entry)
                     store.markPasted(entry)
                     pasteHandler()
+                } else {
+                    NSSound.beep() // out of range — let the user know
                 }
                 // Always consume the digit so it doesn't fall through to the
                 // text-edit / default handlers, even when out of range.

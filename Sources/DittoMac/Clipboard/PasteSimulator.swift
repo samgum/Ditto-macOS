@@ -22,19 +22,21 @@ enum PasteSimulator {
     /// happens on the main thread (AppKit requirement) and the wait + keystroke
     /// happen on a background queue so the UI never freezes.
     static func paste(into app: NSRunningApplication?, afterDelay seconds: TimeInterval = 0.18) {
-        if let app {
-            DispatchQueue.main.async {
-                app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-            }
+        // Don't paste into nothing — if no previous app is known, sending ⌘V
+        // would land in Ditto's own (hidden) window or nowhere useful.
+        guard let app else {
+            NSLog("[Ditto] paste skipped — no target application known")
+            return
+        }
+        DispatchQueue.main.async {
+            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
         }
         DispatchQueue.global(qos: .userInitiated).async {
             // Give the target a moment to actually take focus before posting.
-            if let app {
-                let start = Date()
-                while Date().timeIntervalSince(start) < 0.4 {
-                    if app.isActive { break }
-                    Thread.sleep(forTimeInterval: 0.03)
-                }
+            let start = Date()
+            while Date().timeIntervalSince(start) < 0.4 {
+                if app.isActive { break }
+                Thread.sleep(forTimeInterval: 0.03)
             }
             Thread.sleep(forTimeInterval: seconds)
             postCommandV()
