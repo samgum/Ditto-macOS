@@ -1014,6 +1014,18 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     /// always-on-top / transparency actually apply on each summon.
     func applyOnShow() {
         applyWindowChrome()
+        // Position the window. .atCursor places it near the mouse pointer
+        // (Ditto's popup-at-cursor behaviour); .previousPosition keeps the last
+        // frame the user left it at.
+        if DittoSettings.windowPositioning == .atCursor, let window {
+            let mouse = NSEvent.mouseLocation
+            let screen = NSScreen.main?.visibleFrame ?? .zero
+            var origin = NSPoint(x: mouse.x + 12, y: mouse.y - window.frame.height / 2)
+            // Keep it fully on-screen.
+            origin.x = min(max(origin.x, screen.minX), screen.maxX - window.frame.width)
+            origin.y = min(max(origin.y, screen.minY), screen.maxY - window.frame.height)
+            window.setFrameOrigin(origin)
+        }
         // Auto-focus the search box when the window opens, so typing filters
         // immediately (Ditto's default behaviour).
         window?.makeFirstResponder(searchField)
