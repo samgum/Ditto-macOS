@@ -215,7 +215,7 @@ final class PreferencesWindowController: NSWindowController {
         searchDescriptionButton.title = LocalizationManager.shared.text("description")
         searchFullTextButton.title = LocalizationManager.shared.text("full_text")
         searchQuickPasteButton.title = LocalizationManager.shared.text("quick_paste_text")
-        regexCaseInsensitiveButton.title = "Regex case-insensitive"
+        regexCaseInsensitiveButton.title = LocalizationManager.shared.text("regex_case_insensitive")
         return grid([
             [label(LocalizationManager.shared.text("search_in")), NSView()],
             [NSView(), searchDescriptionButton],
@@ -252,9 +252,9 @@ final class PreferencesWindowController: NSWindowController {
         webSearchUrlField.action = #selector(webSearchUrlChanged)
 
         enableExpiryButton.title = LocalizationManager.shared.text("enable_expiry")
-        allowDuplicatesButton.title = "Allow duplicate clips"
-        multiPasteReverseButton.title = LocalizationManager.shared.text("multi_paste") + ": reverse"
-        saveMultiPasteButton.title = LocalizationManager.shared.text("multi_paste") + ": save as new"
+        allowDuplicatesButton.title = LocalizationManager.shared.text("allow_duplicate_clips")
+        multiPasteReverseButton.title = LocalizationManager.shared.text("multi_paste_reverse")
+        saveMultiPasteButton.title = LocalizationManager.shared.text("multi_paste_save_new")
 
         return grid([
             [label(LocalizationManager.shared.text("include_apps")), includeAppsField],
@@ -267,7 +267,7 @@ final class PreferencesWindowController: NSWindowController {
             [NSView(), multiPasteReverseButton],
             [NSView(), saveMultiPasteButton],
             [label(LocalizationManager.shared.text("slugify")), slugifySeparatorField],
-            [label("Diff app"), diffAppField],
+            [label(LocalizationManager.shared.text("diff_app")), diffAppField],
             [label(LocalizationManager.shared.text("translate")), translateUrlField],
             [label(LocalizationManager.shared.text("web_search")), webSearchUrlField]
         ])
