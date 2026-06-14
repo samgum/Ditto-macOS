@@ -179,5 +179,7 @@
   "delete_unused": "Excluir itens nunca colados",
   "confirm_delete_unused": "Excluir todos os itens nunca colados?",
   "pin_to_top": "Fixar no topo",
-  "remove_pin": "Desafixar"
+  "remove_pin": "Desafixar",
+  "database_location": "Local do banco",
+  "restart_needed": "Reinicie o Ditto para aplicar o novo local."
 }

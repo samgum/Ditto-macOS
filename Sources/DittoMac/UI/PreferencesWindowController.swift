@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import Foundation
+import UniformTypeIdentifiers
 
 final class PreferencesWindowController: NSWindowController {
     private let store: ClipboardStore
@@ -286,7 +287,8 @@ final class PreferencesWindowController: NSWindowController {
             [label(LocalizationManager.shared.text("diff_app")), diffAppField],
             [label(LocalizationManager.shared.text("translate")), translateUrlField],
             [label(LocalizationManager.shared.text("web_search")), webSearchUrlField],
-            [label(LocalizationManager.shared.text("regex_filters")), regexFiltersField]
+            [label(LocalizationManager.shared.text("regex_filters")), regexFiltersField],
+            [label(LocalizationManager.shared.text("database_location")), databaseRow()]
         ])
     }
 
@@ -609,6 +611,37 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     @objc private func closeWindow() { close() }
+
+    private func databaseRow() -> NSView {
+        databasePathField.placeholderString = "~/Library/Application Support/Ditto/Ditto.db"
+        databasePathField.stringValue = DittoSettings.databasePath
+        databasePathField.isEditable = false
+        databasePathField.translatesAutoresizingMaskIntoConstraints = false
+        databaseChooseButton.bezelStyle = .rounded
+        databaseChooseButton.target = self
+        databaseChooseButton.action = #selector(chooseDatabaseLocation)
+        databaseChooseButton.translatesAutoresizingMaskIntoConstraints = false
+        let stack = NSStackView(views: [databasePathField, databaseChooseButton])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        return stack
+    }
+
+    @objc private func chooseDatabaseLocation() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            DittoSettings.databasePath = url.path
+            self?.databasePathField.stringValue = url.path
+            let alert = NSAlert()
+            alert.messageText = LocalizationManager.shared.text("restart_needed")
+            alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
+            alert.runModal()
+        }
+    }
 }
 
 /// Wraps a closure so an `NSButton` checkbox can invoke it via target/action.

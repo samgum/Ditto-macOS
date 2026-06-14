@@ -179,5 +179,7 @@
   "delete_unused": "Supprimer les éléments jamais collés",
   "confirm_delete_unused": "Supprimer tous les éléments jamais collés ?",
   "pin_to_top": "Épingler en haut",
-  "remove_pin": "Détacher"
+  "remove_pin": "Détacher",
+  "database_location": "Emplacement de la base",
+  "restart_needed": "Redémarrez Ditto pour appliquer le nouvel emplacement."
 }

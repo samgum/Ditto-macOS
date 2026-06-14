@@ -179,5 +179,7 @@
   "delete_unused": "حذف العناصر غير الملصوقة",
   "confirm_delete_unused": "حذف جميع العناصر غير الملصوقة؟",
   "pin_to_top": "تثبيت بالأعلى",
-  "remove_pin": "إلغاء التثبيت"
+  "remove_pin": "إلغاء التثبيت",
+  "database_location": "موقع قاعدة البيانات",
+  "restart_needed": "أعد تشغيل Ditto لتطبيق الموقع الجديد."
 }

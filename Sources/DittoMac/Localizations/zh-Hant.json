@@ -179,5 +179,7 @@
   "delete_unused": "刪除從未貼上的剪貼項",
   "confirm_delete_unused": "刪除所有從未貼上過的剪貼項？",
   "pin_to_top": "置頂",
-  "remove_pin": "取消置頂"
+  "remove_pin": "取消置頂",
+  "database_location": "資料庫位置",
+  "restart_needed": "重啟 Ditto 以套用新的資料庫位置。"
 }

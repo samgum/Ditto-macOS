@@ -179,5 +179,7 @@
   "delete_unused": "Eliminar elementos nunca pegados",
   "confirm_delete_unused": "¿Eliminar todos los elementos nunca pegados?",
   "pin_to_top": "Fijar arriba",
-  "remove_pin": "Desfijar"
+  "remove_pin": "Desfijar",
+  "database_location": "Ubicación de la base",
+  "restart_needed": "Reinicia Ditto para aplicar la nueva ubicación."
 }

@@ -179,5 +179,7 @@
   "delete_unused": "Nie eingefügte Clips löschen",
   "confirm_delete_unused": "Alle nie eingefügten Clips löschen?",
   "pin_to_top": "Oben anheften",
-  "remove_pin": "Lösen"
+  "remove_pin": "Lösen",
+  "database_location": "Datenbankort",
+  "restart_needed": "Starten Sie Ditto neu, um den neuen Ort zu übernehmen."
 }

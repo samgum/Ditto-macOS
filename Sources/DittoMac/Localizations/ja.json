@@ -179,5 +179,7 @@
   "delete_unused": "貼り付けたことのないクリップを削除",
   "confirm_delete_unused": "一度も貼り付けたことのないクリップをすべて削除しますか？",
   "pin_to_top": "先頭に固定",
-  "remove_pin": "固定解除"
+  "remove_pin": "固定解除",
+  "database_location": "データベースの場所",
+  "restart_needed": "新しいデータベースの場所を適用するにはDittoを再起動してください。"
 }

@@ -243,7 +243,9 @@ final class LocalizationManager {
         "delete_unused": "Delete Never-Pasted Clips",
         "confirm_delete_unused": "Delete all clips that have never been pasted?",
         "pin_to_top": "Pin to Top",
-        "remove_pin": "Unpin"
+        "remove_pin": "Unpin",
+        "database_location": "Database Location",
+        "restart_needed": "Restart Ditto to apply the new database location."
     ]
 }
 
