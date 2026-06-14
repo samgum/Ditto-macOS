@@ -169,5 +169,13 @@
   "regex_case_insensitive": "Regulärer Ausdruck: Groß-/Kleinschreibung ignorieren",
   "copy_buffers_desc": "Zwischenspeicher erfassen die aktuelle Zwischenablage in einem nummerierten Slot. Legen Sie pro Slot einen Tastaturkurzbefehl (Kopieren/Einfügen) fest.",
   "friends_desc": "Verwalten Sie Freunde in der Menüleiste ▸ Freunde. Dieser Reiter listet die aktuellen Freunde.",
-  "accessibility_setup_steps": "1. Systemeinstellungen ▸ Datenschutz & Sicherheit ▸ Bedienungshilfen öffnen.\n2. Falls Ditto schon in der Liste steht (alte Version), markieren und mit − ENTFERNEN.\n3. Auf + klicken und /Applications/Ditto.app hinzufügen.\n4. Schalter aktivieren.\nDa jeder Build neu signiert wird, funktioniert ein alter Eintrag nicht — nach jedem Update entfernen und neu hinzufügen."
+  "accessibility_setup_steps": "1. Systemeinstellungen ▸ Datenschutz & Sicherheit ▸ Bedienungshilfen öffnen.\n2. Falls Ditto schon in der Liste steht (alte Version), markieren und mit − ENTFERNEN.\n3. Auf + klicken und /Applications/Ditto.app hinzufügen.\n4. Schalter aktivieren.\nDa jeder Build neu signiert wird, funktioniert ein alter Eintrag nicht — nach jedem Update entfernen und neu hinzufügen.",
+  "share": "Teilen",
+  "database": "Datenbank",
+  "backup_database": "Datenbank sichern…",
+  "compact_database": "Datenbank komprimieren",
+  "compact_done": "Datenbank komprimiert.",
+  "regex_filters": "Übereinstimmende Clips überspringen (Regex, eine pro Zeile)",
+  "delete_unused": "Nie eingefügte Clips löschen",
+  "confirm_delete_unused": "Alle nie eingefügten Clips löschen?"
 }

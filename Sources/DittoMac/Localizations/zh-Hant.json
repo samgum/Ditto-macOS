@@ -169,5 +169,13 @@
   "show_save_notification": "儲存剪貼項時顯示通知",
   "copy_buffers_desc": "複製緩衝把目前剪貼板存進編號槽位。每個槽位可設定複製/貼上快捷鍵。",
   "friends_desc": "在選單列「好友」裡管理。此處列出目前好友。",
-  "accessibility_setup_steps": "1. 打開「系統設定 ▸ 隱私與安全性 ▸ 輔助功能」。\n2. 如果列表裡已有 Ditto（舊版本的），選中它點 − 刪除。\n3. 點 +，加入 /Applications/Ditto.app。\n4. 打開開關。\n因為每次構建都重新簽名，舊條目不會生效——每次更新後都必須先刪再加。"
+  "accessibility_setup_steps": "1. 打開「系統設定 ▸ 隱私與安全性 ▸ 輔助功能」。\n2. 如果列表裡已有 Ditto（舊版本的），選中它點 − 刪除。\n3. 點 +，加入 /Applications/Ditto.app。\n4. 打開開關。\n因為每次構建都重新簽名，舊條目不會生效——每次更新後都必須先刪再加。",
+  "share": "共享",
+  "database": "資料庫",
+  "backup_database": "備份資料庫…",
+  "compact_database": "壓縮資料庫",
+  "compact_done": "資料庫已壓縮。",
+  "regex_filters": "跳過符合的剪貼項（正規表示式，每行一個）",
+  "delete_unused": "刪除從未貼上的剪貼項",
+  "confirm_delete_unused": "刪除所有從未貼上過的剪貼項？"
 }

@@ -169,5 +169,13 @@
   "show_save_notification": "保存剪贴项时显示通知",
   "copy_buffers_desc": "复制缓冲把当前剪贴板存进编号槽位。每个槽位可设置复制/粘贴热键。",
   "friends_desc": "在菜单栏「好友」里管理。此处列出当前好友。",
-  "accessibility_setup_steps": "1. 打开「系统设置 ▸ 隐私与安全性 ▸ 辅助功能」。\n2. 如果列表里已有 Ditto（旧版本的），选中它点 − 删除。\n3. 点 +，添加 /Applications/Ditto.app。\n4. 打开开关。\n因为每次构建都重新签名，旧条目不会生效——每次更新后都必须先删再加。"
+  "accessibility_setup_steps": "1. 打开「系统设置 ▸ 隐私与安全性 ▸ 辅助功能」。\n2. 如果列表里已有 Ditto（旧版本的），选中它点 − 删除。\n3. 点 +，添加 /Applications/Ditto.app。\n4. 打开开关。\n因为每次构建都重新签名，旧条目不会生效——每次更新后都必须先删再加。",
+  "share": "共享",
+  "database": "数据库",
+  "backup_database": "备份数据库…",
+  "compact_database": "压缩数据库",
+  "compact_done": "数据库已压缩。",
+  "regex_filters": "跳过匹配的剪贴项（正则，每行一个）",
+  "delete_unused": "删除从未粘贴的剪贴项",
+  "confirm_delete_unused": "删除所有从未粘贴过的剪贴项？"
 }

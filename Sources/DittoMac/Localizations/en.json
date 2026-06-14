@@ -169,5 +169,13 @@
   "never": "never",
   "copy_buffers_desc": "Copy buffers capture the current clipboard into a numbered slot. Set a hot key per slot (copy and paste).",
   "friends_desc": "Manage friends under the menu bar ▸ Friends. This tab lists current friends.",
-  "accessibility_setup_steps": "1. Open System Settings ▸ Privacy & Security ▸ Accessibility.\n2. If Ditto is already in the list (from a previous version), select it and click − to REMOVE it.\n3. Click + and add /Applications/Ditto.app.\n4. Enable the toggle.\nBecause each build is freshly signed, an old entry won't work — you must remove and re-add after every update."
+  "accessibility_setup_steps": "1. Open System Settings ▸ Privacy & Security ▸ Accessibility.\n2. If Ditto is already in the list (from a previous version), select it and click − to REMOVE it.\n3. Click + and add /Applications/Ditto.app.\n4. Enable the toggle.\nBecause each build is freshly signed, an old entry won't work — you must remove and re-add after every update.",
+  "share": "Share",
+  "database": "Database",
+  "backup_database": "Backup Database…",
+  "compact_database": "Compact Database",
+  "compact_done": "Database compacted.",
+  "regex_filters": "Skip clips matching (regex, one per line)",
+  "delete_unused": "Delete Never-Pasted Clips",
+  "confirm_delete_unused": "Delete all clips that have never been pasted?"
 }
