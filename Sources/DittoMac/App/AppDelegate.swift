@@ -431,6 +431,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     private func refreshLocalizedText() {
         historyWindowController?.refreshText()
         preferencesWindowController?.refreshText()
+        // Re-localize any open secondary windows (titles are set at init time).
+        groupsWindowController?.window?.title = LocalizationManager.shared.text("group") + "s"
+        friendsWindowController?.window?.title = LocalizationManager.shared.text("friends")
+        statisticsWindowController?.window?.title = LocalizationManager.shared.text("statistics")
+        statisticsWindowController?.refresh()
+        propertiesWindowController?.window?.title = LocalizationManager.shared.text("clip_properties")
+        editorWindowController?.window?.title = LocalizationManager.shared.text("edit_clip")
+        qrWindowController?.window?.title = LocalizationManager.shared.text("qr_code")
+        imageViewerWindowController?.window?.title = LocalizationManager.shared.text("app_name")
         if let statusMenu { rebuildStatusMenu(statusMenu) }
     }
 

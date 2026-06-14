@@ -278,7 +278,7 @@ final class PreferencesWindowController: NSWindowController {
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
-        let info = NSTextField(wrappingLabelWithString: "Copy buffers capture the current clipboard into a numbered slot. Set a hot key per slot (copy and paste).")
+        let info = NSTextField(wrappingLabelWithString: LocalizationManager.shared.text("copy_buffers_desc"))
         info.font = NSFont.systemFont(ofSize: 11)
         info.textColor = .secondaryLabelColor
         stack.addArrangedSubview(info)
@@ -338,7 +338,7 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     private func friendsPlaceholderTab() -> NSView {
-        let label = NSTextField(wrappingLabelWithString: "Manage friends under the menu bar ▸ Friends. This tab lists current friends.")
+        let label = NSTextField(wrappingLabelWithString: LocalizationManager.shared.text("friends_desc"))
         label.font = NSFont.systemFont(ofSize: 12)
         let container = NSView()
         container.addSubview(label)

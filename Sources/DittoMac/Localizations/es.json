@@ -161,5 +161,12 @@
   "accessibility_required_title": "Concede Accesibilidad para pegar",
   "accessibility_required_body": "Ditto simula ⌘V para pegar en otras apps, lo que requiere activar Ditto en Ajustes del Sistema ▸ Privacidad y seguridad ▸ Accesibilidad. El elemento ya está copiado — pulsa ⌘V tú mismo por ahora y concede el permiso para que Ditto pegue automáticamente.",
   "open_system_settings": "Abrir Ajustes del Sistema",
-  "show_save_notification": "Notificar al guardar"
+  "show_save_notification": "Notificar al guardar",
+  "allow_duplicate_clips": "Permitir clips duplicados",
+  "diff_app": "App de diferencias",
+  "multi_paste_reverse": "Multi-pegado: invertir orden",
+  "multi_paste_save_new": "Multi-pegado: guardar como nuevo",
+  "regex_case_insensitive": "Regex sin distinguir mayúsculas",
+  "copy_buffers_desc": "Los búferes de copia guardan el portapapeles actual en una ranura numerada. Configura un atajo por ranura (copiar/pegar).",
+  "friends_desc": "Gestiona los amigos en la barra de menús ▸ Amigos. Esta pestaña lista los amigos actuales."
 }

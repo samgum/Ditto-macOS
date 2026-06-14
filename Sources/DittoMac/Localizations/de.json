@@ -161,5 +161,12 @@
   "accessibility_required_title": "Bedienungshilfen erlauben zum Einfügen",
   "accessibility_required_body": "Ditto simuliert ⌘V, um in andere Apps einzufügen. Dazu muss Ditto in Systemeinstellungen ▸ Datenschutz & Sicherheit ▸ Bedienungshilfen aktiviert sein. Der Eintrag ist bereits kopiert — drücken Sie vorerst selbst ⌘V und erteilen Sie dann die Berechtigung, damit Ditto automatisch einfügt.",
   "open_system_settings": "Systemeinstellungen öffnen",
-  "show_save_notification": "Benachrichtigung beim Speichern"
+  "show_save_notification": "Benachrichtigung beim Speichern",
+  "allow_duplicate_clips": "Duplikate zulassen",
+  "diff_app": "Diff-App",
+  "multi_paste_reverse": "Mehrfach einfügen: Reihenfolge umkehren",
+  "multi_paste_save_new": "Mehrfach einfügen: als neu speichern",
+  "regex_case_insensitive": "Regulärer Ausdruck: Groß-/Kleinschreibung ignorieren",
+  "copy_buffers_desc": "Zwischenspeicher erfassen die aktuelle Zwischenablage in einem nummerierten Slot. Legen Sie pro Slot einen Tastaturkurzbefehl (Kopieren/Einfügen) fest.",
+  "friends_desc": "Verwalten Sie Freunde in der Menüleiste ▸ Freunde. Dieser Reiter listet die aktuellen Freunde."
 }

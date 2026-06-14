@@ -161,5 +161,12 @@
   "global": "Global",
   "last_pasted": "Última colagem",
   "source_app": "App de origem",
-  "never": "nunca"
+  "never": "nunca",
+  "allow_duplicate_clips": "Permitir clips duplicados",
+  "diff_app": "App de diff",
+  "multi_paste_reverse": "Multi-colagem: inverter ordem",
+  "multi_paste_save_new": "Multi-colagem: salvar como novo",
+  "regex_case_insensitive": "Regex sem distinguir maiúsculas",
+  "copy_buffers_desc": "Os buffers de cópia guardam a área de transferência atual em um slot numerado. Defina um atalho por slot (copiar/colar).",
+  "friends_desc": "Gerencie amigos na barra de menus ▸ Amigos. Esta aba lista os amigos atuais."
 }

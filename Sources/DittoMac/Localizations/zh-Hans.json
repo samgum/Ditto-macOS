@@ -166,5 +166,7 @@
   "accessibility_required_title": "需要授权辅助功能才能粘贴",
   "accessibility_required_body": "Ditto 通过模拟 ⌘V 把内容粘进其它 App,这需要你在「系统设置 ▸ 隐私与安全性 ▸ 辅助功能」里启用 Ditto。剪贴项已复制——你可以先手动按 ⌘V,然后授权,之后 Ditto 就能自动粘贴了。",
   "open_system_settings": "打开系统设置",
-  "show_save_notification": "保存剪贴项时显示通知"
+  "show_save_notification": "保存剪贴项时显示通知",
+  "copy_buffers_desc": "复制缓冲把当前剪贴板存进编号槽位。每个槽位可设置复制/粘贴热键。",
+  "friends_desc": "在菜单栏「好友」里管理。此处列出当前好友。"
 }

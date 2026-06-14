@@ -161,5 +161,12 @@
   "accessibility_required_title": "Autorisez l'Accessibilité pour coller",
   "accessibility_required_body": "Ditto simule ⌘V pour coller dans d'autres apps, ce qui nécessite d'activer Ditto dans Réglages Système ▸ Confidentialité et sécurité ▸ Accessibilité. Le clip est déjà copié — appuyez sur ⌘V vous-même pour l'instant, puis accordez l'autorisation pour que Ditto colle automatiquement.",
   "open_system_settings": "Ouvrir les réglages système",
-  "show_save_notification": "Notifier à l'enregistrement"
+  "show_save_notification": "Notifier à l'enregistrement",
+  "allow_duplicate_clips": "Autoriser les doublons",
+  "diff_app": "App de diff",
+  "multi_paste_reverse": "Multi-collage : inverser l'ordre",
+  "multi_paste_save_new": "Multi-collage : enregistrer comme nouveau",
+  "regex_case_insensitive": "Regex insensible à la casse",
+  "copy_buffers_desc": "Les tampons de copie capturent le presse-papiers actuel dans un emplacement numéroté. Définissez un raccourci par emplacement (copier/coller).",
+  "friends_desc": "Gérez les amis dans la barre de menus ▸ Amis. Cet onglet liste les amis actuels."
 }

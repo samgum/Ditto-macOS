@@ -161,5 +161,12 @@
   "accessibility_required_title": "貼り付けにはアクセシビリティ権限が必要です",
   "accessibility_required_body": "Ditto は ⌘V をシミュレートして他のアプリに貼り付けます。これには「システム設定 ▸ プライバシーとセキュリティ ▸ アクセシビリティ」で Ditto を有効にする必要があります。クリップは既にコピー済みです—まず手動で ⌘V を押し、権限を許可すれば次から自動で貼り付けられます。",
   "open_system_settings": "システム設定を開く",
-  "show_save_notification": "保存時に通知を表示"
+  "show_save_notification": "保存時に通知を表示",
+  "allow_duplicate_clips": "重複クリップを許可",
+  "diff_app": "差分アプリ",
+  "multi_paste_reverse": "複数貼り付け: 逆順",
+  "multi_paste_save_new": "複数貼り付け: 新規として保存",
+  "regex_case_insensitive": "正規表現で大文字小文字を区別しない",
+  "copy_buffers_desc": "コピーバッファは現在のクリップボードを番号付きスロットに保存します。スロットごとにホットキー（コピー/貼り付け）を設定できます。",
+  "friends_desc": "フレンドはメニューバー ▸ フレンド で管理します。ここには現在のフレンドを一覧表示します。"
 }

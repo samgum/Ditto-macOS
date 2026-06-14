@@ -166,5 +166,7 @@
   "global": "Global",
   "last_pasted": "Last pasted",
   "source_app": "Source App",
-  "never": "never"
+  "never": "never",
+  "copy_buffers_desc": "Copy buffers capture the current clipboard into a numbered slot. Set a hot key per slot (copy and paste).",
+  "friends_desc": "Manage friends under the menu bar ▸ Friends. This tab lists current friends."
 }
