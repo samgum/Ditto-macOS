@@ -35,6 +35,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let store: ClipboardStore
     private weak var delegate: HistoryWindowDelegate?
     private let pasteHandler: () -> Void
+    /// Lets the AppDelegate sync the clipboard monitor after Ditto writes the
+    /// pasteboard, so restored content isn't re-captured as a new entry.
+    var syncMonitor: (() -> Void)?
 
     private let searchField = NSSearchField()
     private let modePopup = NSPopUpButton()
@@ -283,7 +286,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         store.copyToPasteboard(entry)
         store.markPasted(entry)
         pasteHandler()
-        if let snapshot { ClipboardSaveRestore.restore(snapshot) }
+        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.syncMonitor?() } }
         if DittoSettings.refreshAfterPaste {
             refresh()
         }

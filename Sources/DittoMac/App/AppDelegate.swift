@@ -194,7 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
                 if let entry = copyBufferManager.paste(slot: slot) {
                     store.markPasted(entry)
                     pasteToPreviousApplication()
-                    if let snapshot { ClipboardSaveRestore.restore(snapshot) }
+                    if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
                 }
             } else {
                 copyBufferManager.captureCurrentClipboard(into: slot)
@@ -212,15 +212,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     private func pasteSpecificClip(id: UUID) {
         guard let entry = store.entry(id: id) else { return }
         store.copyToPasteboard(entry)
+        // Sync the monitor's change count so it does NOT re-capture the clip
+        // we just placed (otherwise the pasted item appears twice in history).
+        monitor?.syncChangeCount()
         store.markPasted(entry)
         Statistics.shared.recordPaste()
         if DittoSettings.hideDittoOnPaste {
             historyWindowController?.window?.orderOut(nil)
         }
         let target = activeAppTracker.previousApplication
-        if PasteSimulator.hasAccessibilityPermission == false {
-            PasteSimulator.promptForAccessibility()
-        }
         PasteSimulator.paste(into: target)
     }
 
@@ -264,13 +264,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     @objc func showHistory() {
         if historyWindowController == nil {
-            historyWindowController = HistoryWindowController(
+            let controller = HistoryWindowController(
                 store: store,
                 delegate: self,
                 pasteHandler: { [weak self] in
                     self?.pasteToPreviousApplication()
                 }
             )
+            controller.syncMonitor = { [weak self] in self?.monitor?.syncChangeCount() }
+            historyWindowController = controller
         }
         historyWindowController?.refresh()
         historyWindowController?.showWindow(nil)
@@ -437,6 +439,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         // per-paste prompt, which fired as a false alarm for users who had
         // already granted permission (the check is unreliable for rebuilt
         // ad-hoc binaries).
+        // The caller already placed the clip on the pasteboard; sync the
+        // monitor so it doesn't re-capture it as a new history entry.
+        monitor?.syncChangeCount()
         Statistics.shared.recordPaste()
         PasteSimulator.paste(into: target)
     }
@@ -488,7 +493,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         // pasteToPreviousApplication() already records the paste stat — don't
         // double-count it here.
         pasteToPreviousApplication()
-        if let snapshot { ClipboardSaveRestore.restore(snapshot) }
+        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
     }
 
     @objc private func captureIntoBufferFromMenu(_ sender: NSMenuItem) {
