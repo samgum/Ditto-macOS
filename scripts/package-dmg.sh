@@ -114,9 +114,16 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
-# Let Finder write the .DS_Store, then detach.
-sleep 1
-hdiutil detach "$MOUNT"
+# Let Finder write the .DS_Store, then detach (with retry — CI runners
+# sometimes report "Resource busy" right after AppleScript closes the window).
+sleep 2
+for i in 1 2 3 4 5; do
+  hdiutil detach "$MOUNT" && break
+  echo "    detach attempt $i failed, retrying..."
+  sleep 2
+done
+# Force detach if still mounted.
+hdiutil detach -force "$MOUNT" 2>/dev/null || true
 
 # 3) Convert to compressed read-only (preserves the layout + background).
 hdiutil convert "$RW_DMG" -ov -format UDZO -imagekey zlib-level=9 -o "$DIST_DIR/$DMG_NAME"
