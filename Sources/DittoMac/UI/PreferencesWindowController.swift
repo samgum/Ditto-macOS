@@ -62,6 +62,7 @@ final class PreferencesWindowController: NSWindowController {
     private let webSearchUrlField = NSTextField()
     private let databasePathField = NSTextField()
     private let databaseChooseButton = NSButton(title: "Choose…", target: nil, action: nil)
+    private let regexFiltersField = NSTextField()
 
     private let loginAgent = LoginAgentManager()
 
@@ -262,6 +263,9 @@ final class PreferencesWindowController: NSWindowController {
         translateUrlField.action = #selector(translateUrlChanged)
         webSearchUrlField.target = self
         webSearchUrlField.action = #selector(webSearchUrlChanged)
+        regexFiltersField.placeholderString = "\\d{6}\npassword\nsecret"
+        regexFiltersField.target = self
+        regexFiltersField.action = #selector(regexFiltersChanged)
 
         enableExpiryButton.title = LocalizationManager.shared.text("enable_expiry")
         allowDuplicatesButton.title = LocalizationManager.shared.text("allow_duplicate_clips")
@@ -281,7 +285,8 @@ final class PreferencesWindowController: NSWindowController {
             [label(LocalizationManager.shared.text("slugify")), slugifySeparatorField],
             [label(LocalizationManager.shared.text("diff_app")), diffAppField],
             [label(LocalizationManager.shared.text("translate")), translateUrlField],
-            [label(LocalizationManager.shared.text("web_search")), webSearchUrlField]
+            [label(LocalizationManager.shared.text("web_search")), webSearchUrlField],
+            [label(LocalizationManager.shared.text("regex_filters")), regexFiltersField]
         ])
     }
 
@@ -465,6 +470,7 @@ final class PreferencesWindowController: NSWindowController {
         diffAppField.stringValue = DittoSettings.diffApp
         translateUrlField.stringValue = DittoSettings.translateUrl
         webSearchUrlField.stringValue = DittoSettings.webSearchUrl
+        regexFiltersField.stringValue = DittoSettings.regexCopyFilters.joined(separator: "\n")
         portField.stringValue = "\(DittoSettings.sendRecvPort)"
         passwordField.stringValue = DittoSettings.networkPassword
     }
@@ -562,6 +568,14 @@ final class PreferencesWindowController: NSWindowController {
     @objc private func diffAppChanged() { DittoSettings.diffApp = diffAppField.stringValue }
     @objc private func translateUrlChanged() { DittoSettings.translateUrl = translateUrlField.stringValue }
     @objc private func webSearchUrlChanged() { DittoSettings.webSearchUrl = webSearchUrlField.stringValue }
+
+    @objc private func regexFiltersChanged() {
+        let lines = regexFiltersField.stringValue
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+        DittoSettings.regexCopyFilters = lines
+    }
 
     @objc private func syncEnabledChanged() {
         DittoSettings.allowFriends = syncEnabledButton.state == .on

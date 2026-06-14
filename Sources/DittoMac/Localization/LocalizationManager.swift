@@ -238,7 +238,8 @@ final class LocalizationManager {
         "database": "Database",
         "backup_database": "Backup Database…",
         "compact_database": "Compact Database",
-        "compact_done": "Database compacted."
+        "compact_done": "Database compacted.",
+        "regex_filters": "Skip clips matching (regex, one per line)"
     ]
 }
 
