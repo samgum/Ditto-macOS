@@ -181,5 +181,6 @@
   "pin_to_top": "Fixar no topo",
   "remove_pin": "Desafixar",
   "database_location": "Local do banco",
-  "restart_needed": "Reinicie o Ditto para aplicar o novo local."
+  "restart_needed": "Reinicie o Ditto para aplicar o novo local.",
+  "check_for_updates": "Verificar atualizações ao iniciar"
 }

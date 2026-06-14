@@ -181,5 +181,6 @@
   "pin_to_top": "Oben anheften",
   "remove_pin": "Lösen",
   "database_location": "Datenbankort",
-  "restart_needed": "Starten Sie Ditto neu, um den neuen Ort zu übernehmen."
+  "restart_needed": "Starten Sie Ditto neu, um den neuen Ort zu übernehmen.",
+  "check_for_updates": "Beim Start nach Updates suchen"
 }

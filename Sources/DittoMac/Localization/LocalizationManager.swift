@@ -245,7 +245,8 @@ final class LocalizationManager {
         "pin_to_top": "Pin to Top",
         "remove_pin": "Unpin",
         "database_location": "Database Location",
-        "restart_needed": "Restart Ditto to apply the new database location."
+        "restart_needed": "Restart Ditto to apply the new database location.",
+        "check_for_updates": "Check for updates on launch"
     ]
 }
 

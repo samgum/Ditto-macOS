@@ -173,6 +173,11 @@ enum DittoSettings {
         set { defaults.set(newValue, forKey: "Ditto.ShowSaveNotification") }
     }
 
+    static var checkForUpdates: Bool {
+        get { defaults.bool(forKey: "Ditto.CheckForUpdates") }
+        set { defaults.set(newValue, forKey: "Ditto.CheckForUpdates") }
+    }
+
     static var refreshAfterPaste: Bool {
         get { defaults.object(forKey: "Ditto.RefreshViewAfterPasting") == nil ? true : defaults.bool(forKey: "Ditto.RefreshViewAfterPasting") }
         set { defaults.set(newValue, forKey: "Ditto.RefreshViewAfterPasting") }

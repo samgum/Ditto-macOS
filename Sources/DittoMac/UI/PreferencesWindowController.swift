@@ -20,6 +20,7 @@ final class PreferencesWindowController: NSWindowController {
     private let playSoundButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let promptOnDeleteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let startupMessageButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let checkUpdatesButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let updateTimeOnPasteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let hideOnPasteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
 
@@ -163,6 +164,7 @@ final class PreferencesWindowController: NSWindowController {
         bindCheckbox(playSoundButton, default: DittoSettings.playSoundOnCopy) { DittoSettings.playSoundOnCopy = $0 }
         bindCheckbox(promptOnDeleteButton, default: DittoSettings.promptWhenDeleting) { DittoSettings.promptWhenDeleting = $0 }
         bindCheckbox(startupMessageButton, default: DittoSettings.showStartupMessage) { DittoSettings.showStartupMessage = $0 }
+        bindCheckbox(checkUpdatesButton, default: DittoSettings.checkForUpdates) { DittoSettings.checkForUpdates = $0 }
         bindCheckbox(updateTimeOnPasteButton, default: DittoSettings.updateTimeOnPaste) { DittoSettings.updateTimeOnPaste = $0 }
         bindCheckbox(hideOnPasteButton, default: DittoSettings.hideDittoOnPaste) { DittoSettings.hideDittoOnPaste = $0 }
         let restoreClipboardButton = NSButton(checkboxWithTitle: LocalizationManager.shared.text("restore_clipboard_after_paste"), target: nil, action: nil)
@@ -178,7 +180,8 @@ final class PreferencesWindowController: NSWindowController {
             [NSView(), updateTimeOnPasteButton],
             [NSView(), hideOnPasteButton],
             [NSView(), restoreClipboardButton],
-            [NSView(), startupMessageButton]
+            [NSView(), startupMessageButton],
+            [NSView(), checkUpdatesButton]
         ])
     }
 
@@ -206,6 +209,7 @@ final class PreferencesWindowController: NSWindowController {
         updateTimeOnPasteButton.title = LocalizationManager.shared.text("update_time_on_paste")
         hideOnPasteButton.title = LocalizationManager.shared.text("hide_on_paste")
         startupMessageButton.title = LocalizationManager.shared.text("show_startup_message")
+        checkUpdatesButton.title = LocalizationManager.shared.text("check_for_updates")
         drawThumbnailsButton.title = LocalizationManager.shared.text("draw_thumbnails")
         pasteAsPlainTextButton.title = LocalizationManager.shared.text("paste_as_plain_text_default")
 

@@ -181,5 +181,6 @@
   "pin_to_top": "置頂",
   "remove_pin": "取消置頂",
   "database_location": "資料庫位置",
-  "restart_needed": "重啟 Ditto 以套用新的資料庫位置。"
+  "restart_needed": "重啟 Ditto 以套用新的資料庫位置。",
+  "check_for_updates": "啟動時檢查更新"
 }

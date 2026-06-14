@@ -181,5 +181,6 @@
   "pin_to_top": "تثبيت بالأعلى",
   "remove_pin": "إلغاء التثبيت",
   "database_location": "موقع قاعدة البيانات",
-  "restart_needed": "أعد تشغيل Ditto لتطبيق الموقع الجديد."
+  "restart_needed": "أعد تشغيل Ditto لتطبيق الموقع الجديد.",
+  "check_for_updates": "التحقق من التحديثات عند التشغيل"
 }

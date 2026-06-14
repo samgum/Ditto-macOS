@@ -181,5 +181,6 @@
   "pin_to_top": "Épingler en haut",
   "remove_pin": "Détacher",
   "database_location": "Emplacement de la base",
-  "restart_needed": "Redémarrez Ditto pour appliquer le nouvel emplacement."
+  "restart_needed": "Redémarrez Ditto pour appliquer le nouvel emplacement.",
+  "check_for_updates": "Vérifier les mises à jour au lancement"
 }

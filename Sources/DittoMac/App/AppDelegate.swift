@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        checkForUpdates()
+        if DittoSettings.checkForUpdates { checkForUpdates() }
         Self.log("launch begin; pid=\(ProcessInfo.processInfo.processIdentifier); bundle=\(Bundle.main.bundleIdentifier ?? "nil")")
 
         // Single-instance guard: if another Ditto is already running, activate

@@ -181,5 +181,6 @@
   "pin_to_top": "맨 앞에 고정",
   "remove_pin": "고정 해제",
   "database_location": "데이터베이스 위치",
-  "restart_needed": "새 데이터베이스 위치를 적용하려면 Ditto를 재시작하세요."
+  "restart_needed": "새 데이터베이스 위치를 적용하려면 Ditto를 재시작하세요.",
+  "check_for_updates": "실행 시 업데이트 확인"
 }
