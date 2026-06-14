@@ -129,7 +129,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
         guard let group = store.groups[safe: row] else { return }
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("group_name")
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
         alert.addButton(withTitle: LocalizationManager.shared.text("cancel"))
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         input.stringValue = group.name

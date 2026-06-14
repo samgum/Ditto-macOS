@@ -366,7 +366,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         guard let entry = currentEntry else { return }
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("set_group")
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
         alert.addButton(withTitle: LocalizationManager.shared.text("cancel"))
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         input.stringValue = store.groupName(for: entry.groupId) ?? ""

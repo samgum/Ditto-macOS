@@ -104,7 +104,7 @@ final class FriendsWindowController: NSWindowController, NSTableViewDataSource, 
     @objc private func addFriend() {
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("add_friend")
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
         alert.addButton(withTitle: LocalizationManager.shared.text("cancel"))
 
         let grid = NSGridView(views: [

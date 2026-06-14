@@ -42,10 +42,12 @@ enum PasteSimulator {
     }
 
     static func postCommandV() {
-        guard hasAccessibilityPermission else {
-            NSLog("[Ditto] paste skipped — Accessibility permission not granted")
-            return
-        }
+        // Always attempt the paste. macOS's AX trust check can report "not
+        // trusted" for a freshly-rebuilt ad-hoc binary even after the user has
+        // granted permission (the grant is keyed to the binary's identity), and
+        // the value can be stale within a session. Gating here would make pastes
+        // silently fail for users who HAVE granted permission — so we post and
+        // let the OS decide. Guidance to grant permission is surfaced elsewhere.
         let source = CGEventSource(stateID: .combinedSessionState)
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)

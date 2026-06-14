@@ -438,29 +438,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             historyWindowController?.window?.orderOut(nil)
         }
         let target = activeAppTracker.previousApplication
-        if PasteSimulator.hasAccessibilityPermission == false {
-            warnAccessibilityOnce()
-            PasteSimulator.promptForAccessibility()
-            // Still attempt the paste; if the user just granted it, it works.
-        }
+        // Always attempt the paste. Accessibility trust is surfaced via the
+        // status-bar menu (✓ / ⚠ + "Grant Accessibility…") rather than a
+        // per-paste prompt, which fired as a false alarm for users who had
+        // already granted permission (the check is unreliable for rebuilt
+        // ad-hoc binaries).
         Statistics.shared.recordPaste()
         PasteSimulator.paste(into: target)
-    }
-
-    private var accessibilityWarned = false
-    private func warnAccessibilityOnce() {
-        guard accessibilityWarned == false else { return }
-        accessibilityWarned = true
-        DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = LocalizationManager.shared.text("accessibility_required_title")
-            alert.informativeText = LocalizationManager.shared.text("accessibility_required_body")
-            alert.addButton(withTitle: LocalizationManager.shared.text("open_system_settings"))
-            alert.addButton(withTitle: LocalizationManager.shared.text("close"))
-            if alert.runModal() == .alertFirstButtonReturn {
-                PasteSimulator.promptForAccessibility()
-            }
-        }
     }
 
     // MARK: - Quit
