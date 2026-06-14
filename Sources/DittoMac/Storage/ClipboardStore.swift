@@ -66,6 +66,7 @@ final class ClipboardStore {
         rtfData: Data?,
         htmlData: Data?,
         imageData: Data?,
+        pdfData: Data? = nil,
         fileURLs: [URL],
         sourceApp: String? = nil
     ) -> ClipboardEntry? {
@@ -136,6 +137,7 @@ final class ClipboardStore {
         let rtfBlobKey = saveBlob(rtfData, fileExtension: "rtf")
         let htmlBlobKey = saveBlob(htmlData, fileExtension: "html")
         let imageBlobKey = saveBlob(imageData, fileExtension: "png")
+        let pdfBlobKey = saveBlob(pdfData, fileExtension: "pdf")
 
         let entry = ClipboardEntry(
             id: UUID(),
@@ -143,6 +145,7 @@ final class ClipboardStore {
             rtfBlobKey: rtfBlobKey,
             htmlBlobKey: htmlBlobKey,
             imageBlobKey: imageBlobKey,
+            pdfBlobKey: pdfBlobKey,
             fileURLs: files.isEmpty ? nil : files,
             createdAt: Date(),
             crc: newCRC,
@@ -230,6 +233,12 @@ final class ClipboardStore {
             let imageItem = NSPasteboardItem()
             imageItem.setData(imageData, forType: .png)
             pasteboardItems.append(imageItem)
+        }
+
+        if let pdfBlobKey = entry.pdfBlobKey, let data = blobData(named: pdfBlobKey) {
+            let pdfItem = NSPasteboardItem()
+            pdfItem.setData(data, forType: .pdf)
+            pasteboardItems.append(pdfItem)
         }
 
         if let fileURLs = transformed.fileURLs {

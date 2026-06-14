@@ -23,7 +23,7 @@ final class MacClipboardDatabase {
     /// `transaction → execute → query` nesting on the same thread is safe.
     private let lock = NSRecursiveLock()
 
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 4
 
     init(url: URL, useWAL: Bool = true, readOnly: Bool = false) throws {
         if readOnly == false {
@@ -137,6 +137,7 @@ final class MacClipboardDatabase {
             ("shortcutKey", "INTEGER DEFAULT 0"),
             ("shortcutGlobal", "INTEGER DEFAULT 0"),
             ("moveToGroupShortcut", "INTEGER DEFAULT 0"),
+            ("pdfBlobKey", "TEXT"),
             ("globalMoveToGroup", "INTEGER DEFAULT 0"),
             ("crc", "INTEGER"),
             ("sourceApp", "TEXT"),
@@ -193,7 +194,7 @@ final class MacClipboardDatabase {
             SELECT id, text, rtfBlobKey, htmlBlobKey, imageBlobKey, fileURLsJson,
                    createdAt, lastPasteDate, isFavorite, neverAutoDelete, quickPasteText,
                    clipOrder, shortcutKey, shortcutGlobal, moveToGroupShortcut, globalMoveToGroup,
-                   crc, sourceApp, pasteCount, groupId
+                   crc, sourceApp, pasteCount, groupId, pdfBlobKey
             FROM ClipboardEntries
             ORDER BY neverAutoDelete DESC, isFavorite DESC, clipOrder DESC, createdAt DESC
             """
@@ -212,6 +213,7 @@ final class MacClipboardDatabase {
                         rtfBlobKey: Self.optionalString(statement, 2),
                         htmlBlobKey: Self.optionalString(statement, 3),
                         imageBlobKey: Self.optionalString(statement, 4),
+                        pdfBlobKey: Self.optionalString(statement, 20),
                         fileURLs: fileURLs,
                         createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 6)),
                         lastPasteDate: Self.optionalDate(statement, 7),
@@ -254,9 +256,9 @@ final class MacClipboardDatabase {
                 id, text, rtfBlobKey, htmlBlobKey, imageBlobKey, fileURLsJson,
                 createdAt, lastPasteDate, isFavorite, neverAutoDelete, quickPasteText,
                 clipOrder, shortcutKey, shortcutGlobal, moveToGroupShortcut, globalMoveToGroup,
-                crc, sourceApp, pasteCount, groupId
+                crc, sourceApp, pasteCount, groupId, pdfBlobKey
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 text=excluded.text,
                 rtfBlobKey=excluded.rtfBlobKey,
@@ -276,7 +278,8 @@ final class MacClipboardDatabase {
                 crc=excluded.crc,
                 sourceApp=excluded.sourceApp,
                 pasteCount=excluded.pasteCount,
-                groupId=excluded.groupId
+                groupId=excluded.groupId,
+                pdfBlobKey=excluded.pdfBlobKey
             """,
             binds: { statement in
                 sqlite3_bind_text(statement, 1, entry.id.uuidString, -1, databaseTransientDestructor)
@@ -299,6 +302,7 @@ final class MacClipboardDatabase {
                 self.bindOptionalText(statement, 18, entry.sourceApp)
                 sqlite3_bind_int(statement, 19, Int32(entry.pasteCount))
                 Self.bindOptionalInt64(statement, 20, entry.groupId)
+                self.bindOptionalText(statement, 21, entry.pdfBlobKey)
             }
         )
     }

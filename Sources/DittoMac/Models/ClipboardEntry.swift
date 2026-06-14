@@ -11,6 +11,7 @@ struct ClipboardEntry: Codable, Equatable {
     var rtfBlobKey: String?
     var htmlBlobKey: String?
     var imageBlobKey: String?
+    var pdfBlobKey: String?
     var fileURLs: [String]?
     var createdAt: Date
     var lastPasteDate: Date?
@@ -33,6 +34,7 @@ struct ClipboardEntry: Codable, Equatable {
         rtfBlobKey: String? = nil,
         htmlBlobKey: String? = nil,
         imageBlobKey: String? = nil,
+        pdfBlobKey: String? = nil,
         fileURLs: [String]? = nil,
         createdAt: Date = Date(),
         lastPasteDate: Date? = nil,
@@ -54,6 +56,7 @@ struct ClipboardEntry: Codable, Equatable {
         self.rtfBlobKey = rtfBlobKey
         self.htmlBlobKey = htmlBlobKey
         self.imageBlobKey = imageBlobKey
+        self.pdfBlobKey = pdfBlobKey
         self.fileURLs = fileURLs
         self.createdAt = createdAt
         self.lastPasteDate = lastPasteDate

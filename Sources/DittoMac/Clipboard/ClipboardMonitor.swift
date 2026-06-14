@@ -78,6 +78,7 @@ final class ClipboardMonitor {
         let rtfData = pasteboard.data(forType: .rtf)
         let htmlData = pasteboard.data(forType: .dittoHTML)
         let imageData = ClipboardMonitor.imageData(from: pasteboard)
+        let pdfData = pasteboard.data(forType: .pdf)
         let fileURLs = ClipboardMonitor.fileURLs(from: pasteboard)
 
         store.addClipboardPayload(
@@ -85,6 +86,7 @@ final class ClipboardMonitor {
             rtfData: rtfData,
             htmlData: htmlData,
             imageData: imageData,
+            pdfData: pdfData,
             fileURLs: fileURLs,
             sourceApp: appName
         )

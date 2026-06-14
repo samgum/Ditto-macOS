@@ -896,6 +896,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             case "f": searchField.becomeFirstResponder(); return nil
             case "c": copySelectedEntry(); return nil
             case "v": pasteSelectedEntry(); return nil
+            case "n": newClip(); return nil
+            case "e": showEditor(); return nil
             default: break
             }
         }
