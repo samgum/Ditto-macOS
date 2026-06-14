@@ -1140,7 +1140,15 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         ])
     }
 
-    // MARK: - Window chrome (always-on-top, transparency, positioning)
+    private func applySelectionColors() {
+        let theme = DittoTheme.current
+        if window?.isKeyWindow == true {
+            tableView.selectionHighlightStyle = .regular
+        } else {
+            tableView.selectionHighlightStyle = .sourceList
+        }
+        _ = theme.listBoxSelectedNoFocusBackground
+    }
 
     private func applyWindowChrome() {
         guard let window else { return }

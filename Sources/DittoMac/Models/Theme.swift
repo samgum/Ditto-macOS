@@ -66,8 +66,16 @@ struct DittoTheme: Equatable {
         accent.withAlphaComponent(mode.isDark ? 0.32 : 0.22)
     }
 
+    var listBoxSelectedNoFocusBackground: NSColor {
+        NSColor.separatorColor.withAlphaComponent(mode.isDark ? 0.20 : 0.12)
+    }
+
     var listBoxSelectedText: NSColor {
         mode.isDark ? NSColor.white : NSColor.black
+    }
+
+    var listBoxSelectedNoFocusText: NSColor {
+        mode.isDark ? NSColor(white: 0.6, alpha: 1) : NSColor(white: 0.4, alpha: 1)
     }
 
     var captionText: NSColor {
