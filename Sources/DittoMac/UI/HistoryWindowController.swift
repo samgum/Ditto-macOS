@@ -243,7 +243,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     func tableView(_ tableView: NSTableView, rowHeight row: Int) -> CGFloat {
-        DittoSettings.drawThumbnails && filteredEntries[safe: row]?.isImage == true ? 56 : 28
+        DittoSettings.drawThumbnails && filteredEntries[safe: row]?.isImage == true ? 56 : CGFloat(20 + DittoSettings.linesPerRow * 14)
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
