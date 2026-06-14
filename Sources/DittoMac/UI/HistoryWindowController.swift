@@ -87,6 +87,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         configureContent()
         applyTheme()
         applyWindowChrome()
+        window.delegate = MagneticWindowDelegate.shared
 
         keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyDown(event) ?? event
