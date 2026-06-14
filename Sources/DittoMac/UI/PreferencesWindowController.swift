@@ -75,8 +75,8 @@ final class PreferencesWindowController: NSWindowController {
         self.onChanged = onChanged
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 580, height: 520),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 680),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -147,7 +147,21 @@ final class PreferencesWindowController: NSWindowController {
     private func tab(_ title: String, _ build: () -> NSView) -> NSTabViewItem {
         let item = NSTabViewItem()
         item.label = title
-        item.view = build()
+        let content = build()
+        // Wrap in a scroll view so tall tabs (Advanced) don't overflow.
+        let scroll = NSScrollView()
+        scroll.documentView = content
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        content.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
+            content.topAnchor.constraint(equalTo: scroll.topAnchor),
+            content.widthAnchor.constraint(equalTo: scroll.widthAnchor)
+        ])
+        item.view = scroll
         return item
     }
 
