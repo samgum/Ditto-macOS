@@ -13,6 +13,8 @@ final class ClipTableCellView: NSTableCellView {
     private let pinnedIcon = NSTextField(labelWithString: "")
     private let pastedDot = NSView()
     private let indexLabel = NSTextField(labelWithString: "")
+    private var previewLeadingFromIcon: NSLayoutConstraint?
+    private var previewLeadingFromThumb: NSLayoutConstraint?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -68,6 +70,14 @@ final class ClipTableCellView: NSTableCellView {
         indexLabel.drawsBackground = false
         addSubview(indexLabel)
 
+        // Two candidate leading constraints for the preview label: one anchored
+        // to the type icon (text rows) and one to the thumbnail (image rows).
+        // configure() activates the right one so the label sits to the RIGHT of
+        // the thumbnail instead of overlapping it.
+        previewLeadingFromIcon = previewLabel.leadingAnchor.constraint(equalTo: typeIcon.trailingAnchor, constant: 6)
+        previewLeadingFromThumb = previewLabel.leadingAnchor.constraint(equalTo: thumbnailView.trailingAnchor, constant: 8)
+        previewLeadingFromIcon?.isActive = true
+
         NSLayoutConstraint.activate([
             typeIcon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
             typeIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -88,7 +98,6 @@ final class ClipTableCellView: NSTableCellView {
             indexLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             indexLabel.widthAnchor.constraint(equalToConstant: 14),
 
-            previewLabel.leadingAnchor.constraint(equalTo: typeIcon.trailingAnchor, constant: 6),
             previewLabel.trailingAnchor.constraint(lessThanOrEqualTo: pinnedIcon.leadingAnchor, constant: -4),
             previewLabel.topAnchor.constraint(equalTo: topAnchor, constant: 2),
             previewLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
@@ -124,6 +133,11 @@ final class ClipTableCellView: NSTableCellView {
         typeIcon.isHidden = !showsIcon
         colorSwatch.isHidden = !showsColor
         thumbnailView.isHidden = !showsThumbnail
+
+        // Place the preview label to the right of whatever leading element is
+        // shown (thumbnail for images, icon otherwise) — never overlapping.
+        previewLeadingFromThumb?.isActive = showsThumbnail
+        previewLeadingFromIcon?.isActive = !showsThumbnail
 
         typeIcon.image = NSImage(systemSymbolName: Self.symbol(for: entry), accessibilityDescription: entry.typeLabel)
 
