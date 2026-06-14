@@ -202,6 +202,26 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         updatePreview()
+        // Re-validate toolbar buttons (enabled/disabled by selection).
+        NSApp.sendAction(#selector(NSUserInterfaceValidations.validateUserInterfaceItem(_:)), to: nil, from: nil)
+    }
+
+    // MARK: - UI validation (disable actions when nothing is selected)
+
+    private let selectionRequiredSelectors: Set<Selector> = [
+        #selector(copySelectedEntry), #selector(pasteSelectedEntry), #selector(deleteSelectedEntry),
+        #selector(toggleFavoriteSelectedEntry), #selector(toggleNeverAutoDeleteSelectedEntry),
+        #selector(moveToTopSelectedEntry), #selector(moveUpSelectedEntry), #selector(moveDownSelectedEntry),
+        #selector(moveLastSelectedEntry), #selector(showProperties), #selector(showEditor),
+        #selector(showQRCode), #selector(showImageViewer), #selector(exportAsText), #selector(exportAsImage),
+        #selector(webSearch), #selector(translate), #selector(emailClip), #selector(sendToFriend)
+    ]
+
+    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if let action = item.action, selectionRequiredSelectors.contains(action) {
+            return currentEntry != nil
+        }
+        return true
     }
 
     private func configureLabelCell(_ cell: NSTableCellView, text: String) {
@@ -809,6 +829,15 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
                 searchField.stringValue = lastSearchQuery
                 applySearch()
                 return nil
+            }
+            // Down/Up arrow (without modifiers) jumps into the list so you can
+            // arrow-navigate results without leaving the search box's context.
+            if modifiers.isEmpty {
+                if Int(event.keyCode) == kVK_DownArrow, filteredEntries.isEmpty == false {
+                    window?.makeFirstResponder(tableView)
+                    if tableView.selectedRow < 0 { tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
+                    return nil
+                }
             }
             return event
         }
