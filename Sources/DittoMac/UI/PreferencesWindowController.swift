@@ -170,6 +170,16 @@ final class PreferencesWindowController: NSWindowController {
         let restoreClipboardButton = NSButton(checkboxWithTitle: LocalizationManager.shared.text("restore_clipboard_after_paste"), target: nil, action: nil)
         bindCheckbox(restoreClipboardButton, default: DittoSettings.restoreClipboardAfterPaste) { DittoSettings.restoreClipboardAfterPaste = $0 }
 
+        // Set titles HERE (not in appearanceTab) so they show even if
+        // Appearance tab is never opened.
+        openAtLoginButton.title = LocalizationManager.shared.text("open_at_login")
+        playSoundButton.title = LocalizationManager.shared.text("play_sound_on_copy")
+        promptOnDeleteButton.title = LocalizationManager.shared.text("prompt_on_delete")
+        updateTimeOnPasteButton.title = LocalizationManager.shared.text("update_time_on_paste")
+        hideOnPasteButton.title = LocalizationManager.shared.text("hide_on_paste")
+        startupMessageButton.title = LocalizationManager.shared.text("show_startup_message")
+        checkUpdatesButton.title = LocalizationManager.shared.text("check_for_updates")
+
         return grid([
             [label(LocalizationManager.shared.text("language")), languagePopup],
             [label(LocalizationManager.shared.text("hot_key")), hotKeyPopup],
@@ -203,13 +213,6 @@ final class PreferencesWindowController: NSWindowController {
         alwaysOnTopButton.title = LocalizationManager.shared.text("always_on_top")
         showFirstTenButton.title = LocalizationManager.shared.text("show_first_ten")
 
-        openAtLoginButton.title = LocalizationManager.shared.text("open_at_login")
-        playSoundButton.title = LocalizationManager.shared.text("play_sound_on_copy")
-        promptOnDeleteButton.title = LocalizationManager.shared.text("prompt_on_delete")
-        updateTimeOnPasteButton.title = LocalizationManager.shared.text("update_time_on_paste")
-        hideOnPasteButton.title = LocalizationManager.shared.text("hide_on_paste")
-        startupMessageButton.title = LocalizationManager.shared.text("show_startup_message")
-        checkUpdatesButton.title = LocalizationManager.shared.text("check_for_updates")
         drawThumbnailsButton.title = LocalizationManager.shared.text("draw_thumbnails")
         pasteAsPlainTextButton.title = LocalizationManager.shared.text("paste_as_plain_text_default")
 
@@ -291,8 +294,7 @@ final class PreferencesWindowController: NSWindowController {
             [label(LocalizationManager.shared.text("diff_app")), diffAppField],
             [label(LocalizationManager.shared.text("translate")), translateUrlField],
             [label(LocalizationManager.shared.text("web_search")), webSearchUrlField],
-            [label(LocalizationManager.shared.text("regex_filters")), regexFiltersField],
-            [label(LocalizationManager.shared.text("database_location")), databaseRow()]
+            [label(LocalizationManager.shared.text("regex_filters")), regexFiltersField]
         ])
     }
 

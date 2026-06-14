@@ -552,7 +552,6 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     @objc private func sendToSpecificFriend(_ sender: NSMenuItem) {
         guard let entry = currentEntry else { return }
-        // Friend ID is stored in representedObject; the delegate handles the send.
         delegate?.sendEntryToFriend(entry)
     }
 

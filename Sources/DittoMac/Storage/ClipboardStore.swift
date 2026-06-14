@@ -533,6 +533,9 @@ final class ClipboardStore {
     // MARK: - Database maintenance
 
     func backupDatabase(to url: URL) throws {
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
         try FileManager.default.copyItem(at: databaseFileURL, to: url)
     }
 
@@ -575,7 +578,7 @@ final class ClipboardStore {
     }
 
     private func removeBlobFiles(for entry: ClipboardEntry) {
-        database.removeBlobs(keys: [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey].compactMap { $0 })
+        database.removeBlobs(keys: [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey, entry.pdfBlobKey].compactMap { $0 })
     }
 
     func imageData(for entry: ClipboardEntry) -> Data? {
