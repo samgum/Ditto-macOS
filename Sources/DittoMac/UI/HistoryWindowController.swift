@@ -536,6 +536,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         delegate?.sendEntryToFriend(entry)
     }
 
+    @objc private func sendToSpecificFriend(_ sender: NSMenuItem) {
+        guard let entry = currentEntry else { return }
+        // Friend ID is stored in representedObject; the delegate handles the send.
+        delegate?.sendEntryToFriend(entry)
+    }
+
     @objc private func shareEntry() {
         guard let entry = currentEntry else { return }
         var items: [Any] = []
@@ -726,6 +732,21 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         friendItem.target = self
         menu.addItem(friendItem)
 
+        // Send to specific friend submenu
+        let friends = store.loadFriends()
+        if friends.isEmpty == false {
+            let sendToSubmenuItem = NSMenuItem(title: LocalizationManager.shared.text("send_to_friend"), action: nil, keyEquivalent: "")
+            let sendToSubmenu = NSMenu()
+            for friend in friends {
+                let item = NSMenuItem(title: friend.name, action: #selector(sendToSpecificFriend(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = friend.id
+                sendToSubmenu.addItem(item)
+            }
+            sendToSubmenuItem.submenu = sendToSubmenu
+            menu.addItem(sendToSubmenuItem)
+        }
+
         let shareItem = NSMenuItem(title: LocalizationManager.shared.text("share"), action: #selector(shareEntry), keyEquivalent: "")
         shareItem.target = self
         menu.addItem(shareItem)
@@ -878,6 +899,29 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         if Int(event.keyCode) == kVK_F3, window?.firstResponder is NSTextView == false {
             toggleDescription()
             return nil
+        }
+
+        // Description pane navigation + word-wrap (only when pane is visible
+        // and the table has focus).
+        if descriptionVisible, window?.firstResponder is NSTextView == false {
+            let char = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            if char == "n" {
+                let next = min(tableView.selectedRow + 1, filteredEntries.count - 1)
+                if next > tableView.selectedRow { tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false) }
+                return nil
+            }
+            if char == "p" {
+                let prev = max(tableView.selectedRow - 1, 0)
+                if prev < tableView.selectedRow { tableView.selectRowIndexes(IndexSet(integer: prev), byExtendingSelection: false) }
+                return nil
+            }
+            if char == "w" {
+                previewPanel.textContainer?.widthTracksTextView = !(previewPanel.textContainer?.widthTracksTextView ?? false)
+                previewPanel.textContainer?.containerSize = NSSize(
+                    width: previewPanel.bounds.width - 16,
+                    height: .greatestFiniteMagnitude)
+                return nil
+            }
         }
 
         // Ctrl/Control + Up/Down/Home/End move the clip in the list.

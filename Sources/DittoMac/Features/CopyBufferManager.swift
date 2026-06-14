@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import CoreGraphics
 import Foundation
 
 /// Numbered copy/paste slots (1-5). Each slot remembers one clip; a global
@@ -29,6 +30,24 @@ final class CopyBufferManager {
             keys.append(index < stored.count ? stored[index] : SlotHotKeys())
         }
         self.slotHotKeys = keys
+    }
+
+    /// Cut the current selection into slot N (sends Cmd+X, then captures).
+    func cutCurrentClipboard(into slot: Int) {
+        // Send Cmd+X to the active app, then capture the result after a delay.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let source = CGEventSource(stateID: .combinedSessionState)
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(7), keyDown: true) // X
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(7), keyDown: false)
+            keyDown?.flags = .maskCommand
+            keyUp?.flags = .maskCommand
+            keyDown?.post(tap: .cghidEventTap)
+            keyUp?.post(tap: .cghidEventTap)
+            Thread.sleep(forTimeInterval: 0.3)
+            DispatchQueue.main.async {
+                self.captureCurrentClipboard(into: slot)
+            }
+        }
     }
 
     /// Copy whatever is currently on the pasteboard into slot N.
