@@ -995,8 +995,14 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private func updatePreview() {
         guard descriptionVisible else { return }
         let entry = currentEntry
-        if let imageBlobKey = entry?.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
-            previewPanel.string = "[\(entry?.typeLabel ?? "Image")] \(data.count) bytes"
+        if let imageBlobKey = entry?.imageBlobKey, let data = store.blobData(named: imageBlobKey),
+           let image = NSImage(data: data) {
+            // Embed the image as a text attachment so the preview shows the
+            // actual picture, not just a byte-count placeholder.
+            let attachment = NSTextAttachment()
+            attachment.attachmentCell = NSTextAttachmentCell(imageCell: image)
+            let attr = NSAttributedString(attachment: attachment)
+            previewPanel.textStorage?.setAttributedString(attr)
         } else {
             previewPanel.string = entry?.text ?? store.fullText(for: entry ?? ClipboardEntry()) ?? ""
         }
