@@ -77,14 +77,26 @@ enum DittoSettings {
 
     // MARK: - General / Limits
 
-    static let maxHistoryOptions = [100, 500, 1_000, 2_000, 5_000]
+    static let maxHistoryOptions = [0, 100, 500, 1_000, 2_000, 5_000, 10_000]
 
+    /// 0 means unlimited (no trimming).
     static var maxHistoryEntries: Int {
         get {
-            let value = defaults.integer(forKey: Key.maxHistory)
-            return maxHistoryOptions.contains(value) ? value : 500
+            let stored = defaults.object(forKey: Key.maxHistory) as? Int
+            return stored ?? 500
         }
         set { defaults.set(newValue, forKey: Key.maxHistory) }
+    }
+
+    static var databasePath: String {
+        get { defaults.string(forKey: "Ditto.DatabasePath") ?? "" }
+        set { defaults.set(newValue, forKey: "Ditto.DatabasePath") }
+    }
+
+    static var databaseURL: URL? {
+        let path = databasePath
+        guard path.isEmpty == false else { return nil }
+        return URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
     }
 
     static var pollIntervalSeconds: Double {

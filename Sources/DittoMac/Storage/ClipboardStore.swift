@@ -38,7 +38,7 @@ final class ClipboardStore {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         legacyFileURL = directory.appendingPathComponent("history.json")
         legacyDataDirectory = directory.appendingPathComponent("Data", isDirectory: true)
-        let url = databaseURL ?? directory.appendingPathComponent("Ditto.db")
+        let url = databaseURL ?? DittoSettings.databaseURL ?? directory.appendingPathComponent("Ditto.db")
         // Recover from a corrupt database instead of crashing on launch: if
         // the DB can't be opened, quarantine it and start fresh.
         if let opened = try? MacClipboardDatabase(url: url) {
@@ -568,10 +568,11 @@ final class ClipboardStore {
     }
 
     private func trim() {
-        let maxEntries = max(DittoSettings.maxHistoryEntries, 1)
+        let limit = DittoSettings.maxHistoryEntries
+        guard limit > 0 else { return } // 0 = unlimited
         // Pinned clips never count toward the limit.
         let pinnedCount = entries.filter(\.isPinned).count
-        let nonPinnedBudget = max(1, maxEntries - pinnedCount)
+        let nonPinnedBudget = max(1, limit - pinnedCount)
         let nonPinned = entries.filter { $0.isPinned == false }
         if nonPinned.count > nonPinnedBudget {
             let toRemove = Array(nonPinned.suffix(nonPinned.count - nonPinnedBudget))

@@ -60,6 +60,8 @@ final class PreferencesWindowController: NSWindowController {
     private let diffAppField = NSTextField()
     private let translateUrlField = NSTextField()
     private let webSearchUrlField = NSTextField()
+    private let databasePathField = NSTextField()
+    private let databaseChooseButton = NSButton(title: "Choose…", target: nil, action: nil)
 
     private let loginAgent = LoginAgentManager()
 
@@ -424,10 +426,13 @@ final class PreferencesWindowController: NSWindowController {
 
         maxHistoryPopup.removeAllItems()
         for option in DittoSettings.maxHistoryOptions {
-            maxHistoryPopup.addItem(withTitle: "\(option)")
+            maxHistoryPopup.addItem(withTitle: option == 0 ? "∞ Unlimited" : "\(option)")
         }
+        maxHistoryPopup.addItem(withTitle: "Custom…")
         if let index = DittoSettings.maxHistoryOptions.firstIndex(of: DittoSettings.maxHistoryEntries) {
             maxHistoryPopup.selectItem(at: index)
+        } else {
+            maxHistoryPopup.selectItem(at: maxHistoryPopup.numberOfItems - 1)
         }
 
         themePopup.removeAllItems()
@@ -479,10 +484,26 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func maxHistoryChanged() {
         let index = maxHistoryPopup.indexOfSelectedItem
-        guard DittoSettings.maxHistoryOptions.indices.contains(index) else { return }
-        DittoSettings.maxHistoryEntries = DittoSettings.maxHistoryOptions[index]
-        store.enforceLimit()
-        onChanged()
+        if DittoSettings.maxHistoryOptions.indices.contains(index) {
+            DittoSettings.maxHistoryEntries = DittoSettings.maxHistoryOptions[index]
+            store.enforceLimit()
+            onChanged()
+        } else {
+            // "Custom…" — prompt for a number
+            let alert = NSAlert()
+            alert.messageText = LocalizationManager.shared.text("max_history")
+            alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
+            alert.addButton(withTitle: LocalizationManager.shared.text("cancel"))
+            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 120, height: 24))
+            input.stringValue = "\(DittoSettings.maxHistoryEntries)"
+            alert.accessoryView = input
+            if alert.runModal() == .alertFirstButtonReturn, let value = Int(input.stringValue), value > 0 {
+                DittoSettings.maxHistoryEntries = value
+                store.enforceLimit()
+                onChanged()
+            }
+            populate()
+        }
     }
 
     @objc private func themeChanged() {

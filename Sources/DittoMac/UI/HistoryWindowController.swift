@@ -214,7 +214,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         #selector(moveToTopSelectedEntry), #selector(moveUpSelectedEntry), #selector(moveDownSelectedEntry),
         #selector(moveLastSelectedEntry), #selector(showProperties), #selector(showEditor),
         #selector(showQRCode), #selector(showImageViewer), #selector(exportAsText), #selector(exportAsImage),
-        #selector(webSearch), #selector(translate), #selector(emailClip), #selector(sendToFriend)
+        #selector(webSearch), #selector(translate), #selector(emailClip), #selector(sendToFriend),
+        #selector(shareEntry)
     ]
 
     func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
@@ -489,6 +490,27 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         delegate?.sendEntryToFriend(entry)
     }
 
+    @objc private func shareEntry() {
+        guard let entry = currentEntry else { return }
+        var items: [Any] = []
+        // For images, share the NSImage (enables AirDrop, Messages, etc.)
+        if let imageBlobKey = entry.imageBlobKey, let data = store.blobData(named: imageBlobKey), let image = NSImage(data: data) {
+            items.append(image)
+        } else if let text = entry.text {
+            items.append(text)
+        }
+        if let fileURLs = entry.fileURLs {
+            items.append(contentsOf: fileURLs.map { URL(fileURLWithPath: $0) })
+        }
+        guard items.isEmpty == false else { return }
+        let picker = NSSharingServicePicker(items: items)
+        if let rowView = tableView.rowView(atRow: tableView.selectedRow, makeIfNecessary: false) {
+            picker.show(relativeTo: rowView.bounds, of: rowView, preferredEdge: .minY)
+        } else {
+            picker.show(relativeTo: tableView.bounds, of: tableView, preferredEdge: .minY)
+        }
+    }
+
     @objc private func compareSelected() {
         let entries = selectedEntries
         guard entries.count >= 2 else { return }
@@ -657,6 +679,10 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let friendItem = NSMenuItem(title: LocalizationManager.shared.text("send_to_friend"), action: #selector(sendToFriend), keyEquivalent: "")
         friendItem.target = self
         menu.addItem(friendItem)
+
+        let shareItem = NSMenuItem(title: LocalizationManager.shared.text("share"), action: #selector(shareEntry), keyEquivalent: "")
+        shareItem.target = self
+        menu.addItem(shareItem)
 
         if selectedEntries.count >= 2 {
             menu.addItem(.separator())

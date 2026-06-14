@@ -145,6 +145,7 @@ final class LocalizationManager {
         "web_search": "Search the Web",
         "translate": "Translate",
         "email_clip": "Email Clip",
+        "share": "Share",
         "never_auto_delete": "Never Auto Delete",
         "pinned": "Pinned",
         "pasted": "Pasted",
