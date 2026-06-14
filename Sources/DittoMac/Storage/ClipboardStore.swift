@@ -94,11 +94,18 @@ final class ClipboardStore {
             }
         }
 
+        // Multi-format CRC over every captured format's bytes, exactly like
+        // Windows (GenerateCRC over all formats). Used for dedup so that two
+        // different images / file lists don't falsely match each other just
+        // because their text is nil.
+        let newCRC = CRC32.checksumCapture(
+            text: normalizedText, rtfData: rtfData, htmlData: htmlData,
+            imageData: imageData, fileURLs: files
+        )
+
         // Back-to-back duplicate suppression (identical to the last capture).
         if let first = entries.first,
-           first.text == text,
-           first.fileURLs == files,
-           (files.isEmpty == false || text != nil),
+           first.crc == newCRC,
            DittoSettings.allowBackToBackDuplicates == false {
             // Still bubble it to the top + refresh timestamp, like Windows
             // (it re-uses the same row rather than dropping the copy).
@@ -116,7 +123,7 @@ final class ClipboardStore {
         // to the top, preserving favorite/pin/paste-count/group/shortcut. Mirror
         // that: promote the existing entry instead of delete+reinsert.
         if DittoSettings.allowDuplicates == false,
-           let matchIndex = entries.firstIndex(where: { $0.text == text && $0.fileURLs == files && $0.isPinned == false }) {
+           let matchIndex = entries.firstIndex(where: { $0.crc == newCRC && $0.isPinned == false && $0.crc != 0 }) {
             entries[matchIndex].clipOrder = (entries.filter { $0.isPinned == false }.map(\.clipOrder).max() ?? Date().timeIntervalSince1970) + 1
             entries[matchIndex].createdAt = Date()
             repinOrdering()
@@ -136,7 +143,7 @@ final class ClipboardStore {
             imageBlobKey: imageBlobKey,
             fileURLs: files.isEmpty ? nil : files,
             createdAt: Date(),
-            crc: CRC32.checksum(Data((normalizedText ?? "").utf8)),
+            crc: newCRC,
             sourceApp: sourceApp
         )
 

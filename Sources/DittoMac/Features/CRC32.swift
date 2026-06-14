@@ -24,4 +24,22 @@ enum CRC32 {
         }
         return 0
     }
+
+    /// Multi-format CRC over every captured format's bytes, matching the
+    /// Windows `GenerateCRC` over all formats. Two clips match iff their full
+    /// content (text + RTF + HTML + image + file list) is byte-identical —
+    /// so two different screenshots no longer dedup against each other.
+    static func checksumCapture(text: String?, rtfData: Data?, htmlData: Data?, imageData: Data?, fileURLs: [String]) -> Int64 {
+        var combined = Data()
+        if let text { combined.append(Data(text.utf8)) }
+        combined.append(0xFF)
+        if let rtfData { combined.append(rtfData) }
+        combined.append(0xFF)
+        if let htmlData { combined.append(htmlData) }
+        combined.append(0xFF)
+        if let imageData { combined.append(imageData) }
+        combined.append(0xFF)
+        for url in fileURLs { combined.append(Data(url.utf8)); combined.append(0) }
+        return combined.isEmpty ? 0 : checksum(combined)
+    }
 }

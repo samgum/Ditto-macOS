@@ -58,6 +58,15 @@ enum SelfTest {
         // Short words (<=3 letters after stripping punctuation) are unchanged.
         check("typoglycemia short word", TextTransforms.typoglycemia("hi") == "hi")
 
+        // MARK: Multi-format CRC dedup (different images must NOT match)
+        let imgA = Data([0x89, 0x50, 0x4E, 0x47, 0x01])
+        let imgB = Data([0x89, 0x50, 0x4E, 0x47, 0x02])
+        let crcImgA = CRC32.checksumCapture(text: nil, rtfData: nil, htmlData: nil, imageData: imgA, fileURLs: [])
+        let crcImgB = CRC32.checksumCapture(text: nil, rtfData: nil, htmlData: nil, imageData: imgB, fileURLs: [])
+        check("crc differs for different images", crcImgA != crcImgB)
+        check("crc matches for same content", crcImgA == CRC32.checksumCapture(text: nil, rtfData: nil, htmlData: nil, imageData: imgA, fileURLs: []))
+        check("crc nonzero for image", crcImgA != 0)
+
         // MARK: Color detection
         check("hex color #RRGGBB", ColorCodeDetector.color(from: "#ff8800") != nil)
         check("hex color #RGB", ColorCodeDetector.color(from: "#f80") != nil)
