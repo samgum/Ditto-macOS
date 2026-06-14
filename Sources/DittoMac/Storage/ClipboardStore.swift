@@ -158,6 +158,11 @@ final class ClipboardStore {
         if transformed.imageRepresentation == nil, let imageBlobKey = transformed.imageBlobKey, let data = blobData(named: imageBlobKey) {
             let imageItem = NSPasteboardItem()
             imageItem.setData(data, forType: .png)
+            // Also provide a TIFF representation — some apps (image editors,
+            // Preview) read TIFF and ignore PNG on the pasteboard.
+            if let image = NSImage(data: data), let tiff = image.tiffRepresentation {
+                imageItem.setData(tiff, forType: .tiff)
+            }
             pasteboardItems.append(imageItem)
         } else if let imageData = transformed.imageRepresentation {
             let imageItem = NSPasteboardItem()
