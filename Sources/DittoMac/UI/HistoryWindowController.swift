@@ -147,7 +147,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             return matchesGroup && matchesType && matchesSearch
         }
         tableView.reloadData()
-        countLabel.stringValue = "\(filteredEntries.count) / \(store.snapshotEntries().count)"
+        let total = store.snapshotEntries().count
+        if total == 0 {
+            countLabel.stringValue = LocalizationManager.shared.text("no_clips")
+        } else {
+            countLabel.stringValue = "\(filteredEntries.count) / \(total)"
+        }
     }
 
     private func fullText(for entry: ClipboardEntry) -> String? {
@@ -287,7 +292,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     @objc private func pasteSelectedEntry() {
         guard let entry = currentEntry else { return }
         let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
-        store.copyToPasteboard(entry)
+        // Honor the "paste as plain text by default" preference.
+        var options = SpecialPasteOptions()
+        options.pasteAsPlainText = DittoSettings.pasteAsPlainTextByDefault
+        store.copyToPasteboard(entry, options: options)
+        syncMonitor?()
         store.markPasted(entry)
         pasteHandler()
         if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.syncMonitor?() } }
@@ -976,6 +985,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     /// always-on-top / transparency actually apply on each summon.
     func applyOnShow() {
         applyWindowChrome()
+        // Auto-focus the search box when the window opens, so typing filters
+        // immediately (Ditto's default behaviour).
+        window?.makeFirstResponder(searchField)
     }
 
     /// Re-apply always-on-top / transparency after the setting changes

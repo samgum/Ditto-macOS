@@ -94,18 +94,34 @@ final class ClipboardStore {
             }
         }
 
-        // Back-to-back duplicate suppression.
+        // Back-to-back duplicate suppression (identical to the last capture).
         if let first = entries.first,
            first.text == text,
            first.fileURLs == files,
            (files.isEmpty == false || text != nil),
            DittoSettings.allowBackToBackDuplicates == false {
+            // Still bubble it to the top + refresh timestamp, like Windows
+            // (it re-uses the same row rather than dropping the copy).
+            if let idx = entries.indices.first, entries[idx].isPinned == false {
+                entries[idx].clipOrder = (entries.map(\.clipOrder).max() ?? Date().timeIntervalSince1970) + 1
+                entries[idx].createdAt = Date()
+                repinOrdering()
+                persist()
+                return entries[idx]
+            }
             return nil
         }
 
-        // Global duplicate suppression.
-        if DittoSettings.allowDuplicates == false, let text {
-            removeEntries { $0.text == text && $0.fileURLs == files && !$0.isPinned }
+        // Global duplicate suppression — Windows keeps the SAME row and moves it
+        // to the top, preserving favorite/pin/paste-count/group/shortcut. Mirror
+        // that: promote the existing entry instead of delete+reinsert.
+        if DittoSettings.allowDuplicates == false,
+           let matchIndex = entries.firstIndex(where: { $0.text == text && $0.fileURLs == files && $0.isPinned == false }) {
+            entries[matchIndex].clipOrder = (entries.filter { $0.isPinned == false }.map(\.clipOrder).max() ?? Date().timeIntervalSince1970) + 1
+            entries[matchIndex].createdAt = Date()
+            repinOrdering()
+            persist()
+            return entries[matchIndex]
         }
 
         let rtfBlobKey = saveBlob(rtfData, fileExtension: "rtf")
