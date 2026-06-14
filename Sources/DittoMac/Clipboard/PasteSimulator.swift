@@ -18,29 +18,26 @@ enum PasteSimulator {
         }
     }
 
-    /// Activate a specific app and paste into it.
+    /// Activate a specific app and paste into it. Non-blocking: the activate
+    /// happens on the main thread (AppKit requirement) and the wait + keystroke
+    /// happen on a background queue so the UI never freezes.
     static func paste(into app: NSRunningApplication?, afterDelay seconds: TimeInterval = 0.18) {
-        // Bring the target forward first; if no target is known, at least make
-        // sure Ditto itself isn't the frontmost (it can't receive a paste).
         if let app {
-            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-            waitForFrontmost(app, timeout: 0.45)
+            DispatchQueue.main.async {
+                app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Give the target a moment to actually take focus before posting.
+            if let app {
+                let start = Date()
+                while Date().timeIntervalSince(start) < 0.4 {
+                    if app.isActive { break }
+                    Thread.sleep(forTimeInterval: 0.03)
+                }
+            }
+            Thread.sleep(forTimeInterval: seconds)
             postCommandV()
-        }
-    }
-
-    /// Poll briefly until `app` is actually frontmost before posting the
-    /// keystroke — activating is asynchronous and posting too early lands the
-    /// paste in the wrong window.
-    static func waitForFrontmost(_ app: NSRunningApplication, timeout: TimeInterval) {
-        let start = Date()
-        while Date().timeIntervalSince(start) < timeout {
-            if app.isFinishedLaunching == false { Thread.sleep(forTimeInterval: 0.02); continue }
-            // isHidden / isActive reflect activation state reasonably well.
-            if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier { return }
-            Thread.sleep(forTimeInterval: 0.03)
         }
     }
 
