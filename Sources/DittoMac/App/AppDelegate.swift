@@ -336,6 +336,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    @objc func backupDatabase() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
+        panel.nameFieldStringValue = "Ditto-Backup-\(Int(Date().timeIntervalSince1970)).db"
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try self?.store.backupDatabase(to: url)
+                self?.showAlert(message: LocalizationManager.shared.text("export_success"))
+            } catch {
+                self?.showAlert(message: LocalizationManager.shared.text("operation_failed"))
+            }
+        }
+    }
+
+    @objc func compactDatabase() {
+        store.compactDatabase()
+        showAlert(message: LocalizationManager.shared.text("compact_done"))
+    }
+
     @objc func showAbout() {
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("about")
@@ -596,6 +616,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         addItem(menu, title: LocalizationManager.shared.text("import_history"), action: #selector(importHistory), key: "")
         addItem(menu, title: LocalizationManager.shared.text("import_windows_database"), action: #selector(importWindowsDatabase), key: "")
         addItem(menu, title: LocalizationManager.shared.text("export_history"), action: #selector(exportHistory), key: "")
+
+        // Database maintenance submenu
+        let dbItem = NSMenuItem(title: LocalizationManager.shared.text("database"), action: nil, keyEquivalent: "")
+        let dbSubmenu = NSMenu()
+        let backupItem = NSMenuItem(title: LocalizationManager.shared.text("backup_database"), action: #selector(backupDatabase), keyEquivalent: "")
+        backupItem.target = self
+        dbSubmenu.addItem(backupItem)
+        let compactItem = NSMenuItem(title: LocalizationManager.shared.text("compact_database"), action: #selector(compactDatabase), keyEquivalent: "")
+        compactItem.target = self
+        dbSubmenu.addItem(compactItem)
+        dbItem.submenu = dbSubmenu
+        menu.addItem(dbItem)
 
         let recentEntries = Array(store.snapshotEntries().prefix(20))
         if recentEntries.isEmpty == false {

@@ -170,6 +170,52 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     func numberOfRows(in tableView: NSTableView) -> Int { filteredEntries.count }
 
+    // MARK: - Drag OUT (drag a clip to another app)
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard row < filteredEntries.count else { return nil }
+        let entry = filteredEntries[row]
+        let item = NSPasteboardItem()
+        if let text = entry.text { item.setString(text, forType: .string) }
+        if let imageBlobKey = entry.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
+            item.setData(data, forType: .png)
+        }
+        if let fileURLs = entry.fileURLs, fileURLs.isEmpty == false {
+            item.setString(fileURLs.first ?? "", forType: .fileURL)
+        }
+        return item.string(forType: .string) != nil || item.data(forType: .png) != nil ? item : nil
+    }
+
+    // MARK: - Drag IN (drop files/text onto the list)
+
+    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        return .copy
+    }
+
+    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        let pb = info.draggingPasteboard
+        // Accept text
+        if let text = pb.string(forType: .string), text.isEmpty == false {
+            store.addClipboardPayload(text: text, rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
+            refresh()
+            return true
+        }
+        // Accept images
+        if let imageData = ClipboardMonitor.imageData(from: pb) {
+            store.addClipboardPayload(text: nil, rtfData: nil, htmlData: nil, imageData: imageData, fileURLs: [])
+            refresh()
+            return true
+        }
+        // Accept files
+        let fileURLs = ClipboardMonitor.fileURLs(from: pb)
+        if fileURLs.isEmpty == false {
+            store.addClipboardPayload(text: nil, rtfData: nil, htmlData: nil, imageData: nil, fileURLs: fileURLs)
+            refresh()
+            return true
+        }
+        return false
+    }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard row < filteredEntries.count else { return nil }
         let entry = filteredEntries[row]
@@ -932,6 +978,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         tableView.doubleAction = #selector(pasteSelectedEntry)
         tableView.menu = NSMenu()
         tableView.menu?.delegate = self
+        // Enable drag-out (to other apps) and drag-in (files/text onto list).
+        tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
+        tableView.registerForDraggedTypes([.string, .png, .tiff, .fileURL])
 
         let clipColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("clip"))
         clipColumn.title = LocalizationManager.shared.text("clip")

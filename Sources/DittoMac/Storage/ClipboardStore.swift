@@ -8,6 +8,7 @@ final class ClipboardStore {
     private let legacyFileURL: URL
     private let legacyDataDirectory: URL
     private let database: MacClipboardDatabase
+    let databaseFileURL: URL
     private(set) var entries: [ClipboardEntry] = []
     private(set) var groups: [ClipGroup] = []
 
@@ -39,6 +40,7 @@ final class ClipboardStore {
         legacyFileURL = directory.appendingPathComponent("history.json")
         legacyDataDirectory = directory.appendingPathComponent("Data", isDirectory: true)
         let url = databaseURL ?? DittoSettings.databaseURL ?? directory.appendingPathComponent("Ditto.db")
+        databaseFileURL = url
         // Recover from a corrupt database instead of crashing on launch: if
         // the DB can't be opened, quarantine it and start fresh.
         if let opened = try? MacClipboardDatabase(url: url) {
@@ -517,6 +519,16 @@ final class ClipboardStore {
         lock.lock(); defer { lock.unlock() }
         trim()
         persist()
+    }
+
+    // MARK: - Database maintenance
+
+    func backupDatabase(to url: URL) throws {
+        try FileManager.default.copyItem(at: databaseFileURL, to: url)
+    }
+
+    func compactDatabase() {
+        try? database.vacuum()
     }
 
     func enforceExpiry() {

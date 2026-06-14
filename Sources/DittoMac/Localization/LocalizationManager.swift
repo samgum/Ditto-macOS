@@ -234,7 +234,11 @@ final class LocalizationManager {
         "accessibility_required_title": "Grant Accessibility to paste",
         "accessibility_required_body": "Ditto simulates ⌘V to paste into other apps, which macOS only allows if Ditto is enabled in System Settings ▸ Privacy & Security ▸ Accessibility. The clip is already copied — press ⌘V yourself for now, then grant the permission so Ditto can paste automatically.",
         "open_system_settings": "Open System Settings",
-        "show_save_notification": "Show a notification when a clip is saved"
+        "show_save_notification": "Show a notification when a clip is saved",
+        "database": "Database",
+        "backup_database": "Backup Database…",
+        "compact_database": "Compact Database",
+        "compact_done": "Database compacted."
     ]
 }
 
