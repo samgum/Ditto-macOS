@@ -728,8 +728,10 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
                     store.copyToPasteboard(entry)
                     store.markPasted(entry)
                     pasteHandler()
-                    return nil
                 }
+                // Always consume the digit so it doesn't fall through to the
+                // text-edit / default handlers, even when out of range.
+                return nil
             }
         }
 
@@ -759,8 +761,10 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             return nil
         }
 
-        // F3 toggles the description/preview pane (matches Windows default).
-        if Int(event.keyCode) == kVK_F3 {
+        // F3 toggles the description/preview pane — but only when the table
+        // (not a text field) has focus, so it doesn't steal the key from the
+        // search box.
+        if Int(event.keyCode) == kVK_F3, window?.firstResponder is NSTextView == false {
             toggleDescription()
             return nil
         }

@@ -38,7 +38,19 @@ final class ClipboardStore {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         legacyFileURL = directory.appendingPathComponent("history.json")
         legacyDataDirectory = directory.appendingPathComponent("Data", isDirectory: true)
-        database = try! MacClipboardDatabase(url: databaseURL ?? directory.appendingPathComponent("Ditto.db"))
+        let url = databaseURL ?? directory.appendingPathComponent("Ditto.db")
+        // Recover from a corrupt database instead of crashing on launch: if
+        // the DB can't be opened, quarantine it and start fresh.
+        if let opened = try? MacClipboardDatabase(url: url) {
+            database = opened
+        } else {
+            let corrupt = url.deletingPathExtension().appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).db")
+            try? FileManager.default.moveItem(at: url, to: corrupt)
+            NSLog("[Ditto] database was unreadable; moved to \(corrupt.lastPathComponent) and starting fresh.")
+            // try! here is safe: the file no longer exists (moved), so a fresh
+            // create can only fail on a truly unwritable disk.
+            database = try! MacClipboardDatabase(url: url)
+        }
         load()
         migrateLegacyJSONIfNeeded()
         enforceExpiry()
@@ -461,7 +473,12 @@ final class ClipboardStore {
 
     func removeAll() {
         lock.lock(); defer { lock.unlock() }
+        // Free the blobs of every entry before clearing.
+        for entry in entries {
+            removeBlobFiles(for: entry)
+        }
         entries.removeAll()
+        groups.removeAll()
         try? database.removeAll()
     }
 

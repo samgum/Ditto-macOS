@@ -196,24 +196,28 @@ final class SyncCoordinator {
     }
 
     private func receiveLengthPrefixed(connection: NWConnection, completion: @escaping (Data?, Data?) -> Void) {
-        connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { headerLengthData, _, _, _ in
-            guard let headerLengthData, headerLengthData.count == 4 else {
+        connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { headerLengthData, _, isComplete, error in
+            guard error == nil, isComplete == false, let headerLengthData, headerLengthData.count == 4 else {
                 completion(nil, nil)
                 return
             }
             let headerLength = headerLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-            connection.receive(minimumIncompleteLength: Int(headerLength), maximumLength: Int(headerLength)) { headerData, _, _, _ in
-                guard let headerData, headerData.count == Int(headerLength) else {
+            connection.receive(minimumIncompleteLength: Int(headerLength), maximumLength: Int(headerLength)) { headerData, _, isComplete, error in
+                guard error == nil, isComplete == false, let headerData, headerData.count == Int(headerLength) else {
                     completion(nil, nil)
                     return
                 }
-                connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { payloadLengthData, _, _, _ in
-                    guard let payloadLengthData, payloadLengthData.count == 4 else {
+                connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { payloadLengthData, _, isComplete, error in
+                    guard error == nil, isComplete == false, let payloadLengthData, payloadLengthData.count == 4 else {
                         completion(headerData, nil)
                         return
                     }
                     let payloadLength = payloadLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-                    connection.receive(minimumIncompleteLength: Int(payloadLength), maximumLength: Int(payloadLength)) { payloadData, _, _, _ in
+                    connection.receive(minimumIncompleteLength: Int(payloadLength), maximumLength: Int(payloadLength)) { payloadData, _, _, error in
+                        guard error == nil else {
+                            completion(headerData, nil)
+                            return
+                        }
                         completion(headerData, payloadData)
                     }
                 }

@@ -142,7 +142,10 @@ enum WindowsEncryption {
                 }
             }
         }
-        return status == kCCSuccess ? output : input
+        // On failure, bail to the caller by returning a zero-length result —
+        // never the untransformed input (that would silently corrupt the key
+        // derivation). Callers treat empty as a fatal crypto error.
+        return status == kCCSuccess ? output.prefix(moved) : Data()
     }
 
     private static func aesCBC(_ input: Data, key: Data, iv: Data, encrypt: Bool) throws -> Data {
