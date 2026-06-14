@@ -177,5 +177,7 @@
   "compact_done": "数据库已压缩。",
   "regex_filters": "跳过匹配的剪贴项（正则，每行一个）",
   "delete_unused": "删除从未粘贴的剪贴项",
-  "confirm_delete_unused": "删除所有从未粘贴过的剪贴项？"
+  "confirm_delete_unused": "删除所有从未粘贴过的剪贴项？",
+  "pin_to_top": "置顶",
+  "remove_pin": "取消置顶"
 }

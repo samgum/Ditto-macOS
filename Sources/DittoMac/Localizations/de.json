@@ -177,5 +177,7 @@
   "compact_done": "Datenbank komprimiert.",
   "regex_filters": "Übereinstimmende Clips überspringen (Regex, eine pro Zeile)",
   "delete_unused": "Nie eingefügte Clips löschen",
-  "confirm_delete_unused": "Alle nie eingefügten Clips löschen?"
+  "confirm_delete_unused": "Alle nie eingefügten Clips löschen?",
+  "pin_to_top": "Oben anheften",
+  "remove_pin": "Lösen"
 }

@@ -177,5 +177,7 @@
   "compact_done": "資料庫已壓縮。",
   "regex_filters": "跳過符合的剪貼項（正規表示式，每行一個）",
   "delete_unused": "刪除從未貼上的剪貼項",
-  "confirm_delete_unused": "刪除所有從未貼上過的剪貼項？"
+  "confirm_delete_unused": "刪除所有從未貼上過的剪貼項？",
+  "pin_to_top": "置頂",
+  "remove_pin": "取消置頂"
 }

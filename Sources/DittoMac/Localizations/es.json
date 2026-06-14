@@ -177,5 +177,7 @@
   "compact_done": "Base de datos compactada.",
   "regex_filters": "Omitir elementos que coincidan (regex, uno por línea)",
   "delete_unused": "Eliminar elementos nunca pegados",
-  "confirm_delete_unused": "¿Eliminar todos los elementos nunca pegados?"
+  "confirm_delete_unused": "¿Eliminar todos los elementos nunca pegados?",
+  "pin_to_top": "Fijar arriba",
+  "remove_pin": "Desfijar"
 }

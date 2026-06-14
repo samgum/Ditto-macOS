@@ -177,5 +177,7 @@
   "compact_done": "Banco compactado.",
   "regex_filters": "Pular itens correspondentes (regex, um por linha)",
   "delete_unused": "Excluir itens nunca colados",
-  "confirm_delete_unused": "Excluir todos os itens nunca colados?"
+  "confirm_delete_unused": "Excluir todos os itens nunca colados?",
+  "pin_to_top": "Fixar no topo",
+  "remove_pin": "Desafixar"
 }

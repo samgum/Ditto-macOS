@@ -241,7 +241,9 @@ final class LocalizationManager {
         "compact_done": "Database compacted.",
         "regex_filters": "Skip clips matching (regex, one per line)",
         "delete_unused": "Delete Never-Pasted Clips",
-        "confirm_delete_unused": "Delete all clips that have never been pasted?"
+        "confirm_delete_unused": "Delete all clips that have never been pasted?",
+        "pin_to_top": "Pin to Top",
+        "remove_pin": "Unpin"
     ]
 }
 

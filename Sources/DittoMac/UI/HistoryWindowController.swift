@@ -411,6 +411,19 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         refresh()
     }
 
+    @objc private func pinToTopSelectedEntry() {
+        guard let entry = currentEntry else { return }
+        store.toggleNeverAutoDelete(id: entry.id) // pin
+        store.moveClip(id: entry.id, direction: .top)
+        refresh()
+    }
+
+    @objc private func unpinSelectedEntry() {
+        guard let entry = currentEntry else { return }
+        store.toggleNeverAutoDelete(id: entry.id) // unpin
+        refresh()
+    }
+
     @objc private func moveToTopSelectedEntry() {
         guard let entry = currentEntry else { return }
         store.moveClip(id: entry.id, direction: .top)
@@ -652,6 +665,17 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         pinItem.target = self
         pinItem.state = (currentEntry?.isPinned == true) ? .on : .off
         menu.addItem(pinItem)
+
+        // Pin to top (never-delete + highest order) / unpin.
+        if currentEntry?.isPinned == true {
+            let unpinItem = NSMenuItem(title: LocalizationManager.shared.text("remove_pin"), action: #selector(unpinSelectedEntry), keyEquivalent: "")
+            unpinItem.target = self
+            menu.addItem(unpinItem)
+        } else {
+            let pinTopItem = NSMenuItem(title: LocalizationManager.shared.text("pin_to_top"), action: #selector(pinToTopSelectedEntry), keyEquivalent: "")
+            pinTopItem.target = self
+            menu.addItem(pinTopItem)
+        }
 
         let favItem = NSMenuItem(title: LocalizationManager.shared.text("favorite"), action: #selector(toggleFavoriteSelectedEntry), keyEquivalent: "")
         favItem.target = self

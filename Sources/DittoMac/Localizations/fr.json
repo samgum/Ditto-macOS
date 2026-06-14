@@ -177,5 +177,7 @@
   "compact_done": "Base de données compactée.",
   "regex_filters": "Ignorer les éléments correspondants (regex, un par ligne)",
   "delete_unused": "Supprimer les éléments jamais collés",
-  "confirm_delete_unused": "Supprimer tous les éléments jamais collés ?"
+  "confirm_delete_unused": "Supprimer tous les éléments jamais collés ?",
+  "pin_to_top": "Épingler en haut",
+  "remove_pin": "Détacher"
 }
