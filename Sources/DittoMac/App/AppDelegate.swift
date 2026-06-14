@@ -222,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         monitor?.syncChangeCount()
         store.markPasted(entry)
         Statistics.shared.recordPaste()
-        if DittoSettings.hideDittoOnPaste {
+        if DittoSettings.hideDittoOnPaste && DittoSettings.alwaysOnTop == false {
             historyWindowController?.window?.orderOut(nil)
         }
         let target = activeAppTracker.previousApplication
@@ -437,7 +437,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     // MARK: - Paste
 
     private func pasteToPreviousApplication() {
-        if DittoSettings.hideDittoOnPaste {
+        // Hide after paste — UNLESS the window is pinned (always-on-top): a
+        // pinned window is meant to stay open so you can paste item after item
+        // without re-summoning Ditto each time.
+        if DittoSettings.hideDittoOnPaste && DittoSettings.alwaysOnTop == false {
             historyWindowController?.window?.orderOut(nil)
         }
         let target = activeAppTracker.previousApplication
