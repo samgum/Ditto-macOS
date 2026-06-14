@@ -75,14 +75,56 @@ mkdir -p "$DIST_DIR"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$RESOURCES_DIR/Info.plist" 2>/dev/null || echo "0.0.0")
 DMG_NAME="Ditto-macOS-${VERSION}.dmg"
 
-hdiutil create -volname "$APP_NAME" \
-  -srcfolder "$STAGE_DIR" \
-  -ov -format UDZO \
-  "$DIST_DIR/$DMG_NAME"
+# Generate the install background (arrow pointing app -> Applications).
+BG="$BUILD_DIR/dmg_background.png"
+swift "$ROOT_DIR/scripts/make_dmg_background.swift" "$BG"
 
-# Also keep an unversioned symlink-style copy for convenience/CI defaults.
+# 1) Build a read-write DMG from the stage.
+RW_DMG="$DIST_DIR/Ditto-rw.dmg"
+rm -f "$RW_DMG"
+hdiutil create -ov -volname "$APP_NAME" -srcfolder "$STAGE_DIR" -fs HFS+ -format UDRW "$RW_DMG"
+
+# 2) Mount it, drop in the background, and set icon positions / background via
+#    Finder (AppleScript) so the DMG opens with the drag-to-Applications layout.
+MOUNT="/Volumes/$APP_NAME"
+# Detach any stale mount first.
+hdiutil detach "$MOUNT" 2>/dev/null || true
+# Mount read-write at the default /Volumes location so Finder can address the
+# disk by its volume name.
+hdiutil attach -readwrite -noverify -noautoopen "$RW_DMG"
+mkdir -p "$MOUNT/.background"
+cp "$BG" "$MOUNT/.background/background.png"
+osascript <<APPLESCRIPT
+tell application "Finder"
+  tell disk "$APP_NAME"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {0, 0, 660, 400}
+    set opts to the icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 128
+    set background picture of opts to (POSIX file "$MOUNT/.background/background.png" as alias)
+    set position of item "Ditto.app" of container window to {150, 200}
+    set position of item "Applications" of container window to {510, 200}
+    set position of item ".background" of container window to {1200, 1200}
+    close
+    open
+  end tell
+end tell
+APPLESCRIPT
+# Let Finder write the .DS_Store, then detach.
+sleep 1
+hdiutil detach "$MOUNT"
+
+# 3) Convert to compressed read-only (preserves the layout + background).
+hdiutil convert "$RW_DMG" -ov -format UDZO -imagekey zlib-level=9 -o "$DIST_DIR/$DMG_NAME"
+rm -f "$RW_DMG"
+
+# Also keep an unversioned copy for convenience/CI defaults.
 cp "$DIST_DIR/$DMG_NAME" "$DIST_DIR/Ditto-macOS.dmg"
 
-echo "==> Done: $DIST_DIR/$DMG_NAME"
+echo "==> Done: $DIST_DIR/$DMG_NAME (beautified: arrow + drag-to-Applications layout)"
 echo "    (Ad-hoc signed — to open on another Mac: right-click ▸ Open, or"
 echo "     approve in System Settings ▸ Privacy & Security.)"
