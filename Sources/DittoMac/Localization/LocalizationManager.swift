@@ -239,7 +239,9 @@ final class LocalizationManager {
         "backup_database": "Backup Database…",
         "compact_database": "Compact Database",
         "compact_done": "Database compacted.",
-        "regex_filters": "Skip clips matching (regex, one per line)"
+        "regex_filters": "Skip clips matching (regex, one per line)",
+        "delete_unused": "Delete Never-Pasted Clips",
+        "confirm_delete_unused": "Delete all clips that have never been pasted?"
     ]
 }
 

@@ -531,6 +531,13 @@ final class ClipboardStore {
         try? database.vacuum()
     }
 
+    /// Delete clips that have never been pasted and aren't pinned.
+    func deleteNonUsedClips() {
+        lock.lock(); defer { lock.unlock() }
+        removeEntries { $0.pasteCount == 0 && $0.isPinned == false }
+        persist()
+    }
+
     func enforceExpiry() {
         lock.lock(); defer { lock.unlock() }
         guard DittoSettings.checkExpiredEntries else { return }

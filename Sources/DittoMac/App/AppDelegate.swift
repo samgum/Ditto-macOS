@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        checkForUpdates()
         Self.log("launch begin; pid=\(ProcessInfo.processInfo.processIdentifier); bundle=\(Bundle.main.bundleIdentifier ?? "nil")")
 
         // Single-instance guard: if another Ditto is already running, activate
@@ -91,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
         store.enforceExpiry()
         registerNotifications()
+        registerPowerHandling()
         startSync()
         Self.log("launch complete — status item should be visible")
     }
@@ -103,6 +105,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    // MARK: - Update checking
+
+    private func checkForUpdates() {
+        guard let url = URL(string: "https://api.github.com/repos/samgum/Ditto-macOS/releases/latest") else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+            guard let data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tagName = json["tag_name"] as? String else { return }
+            let remote = tagName.replacingOccurrences(of: "v", with: "")
+            let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+            if remote.compare(current, options: .numeric) == .orderedDescending {
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = "Ditto \(tagName) is available"
+                    alert.informativeText = "You have \(current). Download from GitHub Releases."
+                    alert.addButton(withTitle: "Download")
+                    alert.addButton(withTitle: "Later")
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        NSWorkspace.shared.open(URL(string: "https://github.com/samgum/Ditto-macOS/releases/latest")!)
+                    }
+                }
+            }
+        }.resume()
+    }
+
+    // MARK: - Power management (reopen DB after wake)
+
+    private func registerPowerHandling() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(handleWake),
+            name: NSWorkspace.didWakeNotification, object: nil)
+    }
+
+    @objc private func handleWake() {
+        // Re-enforce expiry and refresh after the Mac wakes from sleep.
+        store.enforceExpiry()
+        historyWindowController?.refresh()
+    }
+
+    // MARK: - Maintenance
+
+    @objc func deleteNonUsedClips() {
+        let alert = NSAlert()
+        alert.messageText = LocalizationManager.shared.text("confirm_delete_unused")
+        alert.addButton(withTitle: LocalizationManager.shared.text("delete"))
+        alert.addButton(withTitle: LocalizationManager.shared.text("cancel"))
+        if alert.runModal() == .alertFirstButtonReturn {
+            store.deleteNonUsedClips()
+            historyWindowController?.refresh()
+        }
     }
 
     /// True if another DittoMac process is already running (excluding self).
@@ -626,6 +681,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let compactItem = NSMenuItem(title: LocalizationManager.shared.text("compact_database"), action: #selector(compactDatabase), keyEquivalent: "")
         compactItem.target = self
         dbSubmenu.addItem(compactItem)
+        let deleteUnusedItem = NSMenuItem(title: LocalizationManager.shared.text("delete_unused"), action: #selector(deleteNonUsedClips), keyEquivalent: "")
+        deleteUnusedItem.target = self
+        dbSubmenu.addItem(deleteUnusedItem)
         dbItem.submenu = dbSubmenu
         menu.addItem(dbItem)
 
