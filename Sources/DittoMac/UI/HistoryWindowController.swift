@@ -46,6 +46,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let countLabel = NSTextField(labelWithString: "")
+    private var pinButton: NSButton?
     private let previewPanel = NSTextView()
     private let previewScroll = NSScrollView()
     private var previewHeightConstraint: NSLayoutConstraint?
@@ -954,8 +955,21 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     private func applyWindowChrome() {
         guard let window else { return }
+        // .floating keeps the window above normal-level windows of all apps;
+        // the collection behavior lets it stay visible across spaces/full-screen
+        // so it truly "pins" on top. Re-applied on every show because macOS can
+        // reset the level after the window is ordered out.
         window.level = DittoSettings.alwaysOnTop ? .floating : .normal
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.alphaValue = CGFloat(1.0 - DittoSettings.transparencyPercent / 100.0)
+        // Keep the pin button's state in sync.
+        pinButton?.state = DittoSettings.alwaysOnTop ? .on : .off
+    }
+
+    /// Called by the AppDelegate right after showing the window, so the
+    /// always-on-top / transparency actually apply on each summon.
+    func applyOnShow() {
+        applyWindowChrome()
     }
 
     /// Re-apply always-on-top / transparency after the setting changes
@@ -966,7 +980,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     @objc private func toggleAlwaysOnTop() {
         DittoSettings.alwaysOnTop.toggle()
+        // The pin button is the sender; its state is already flipped by the
+        // toggle button type — re-apply chrome (which also resyncs state).
         applyWindowChrome()
+        // Re-order to front so the level change takes effect immediately.
+        window?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func toggleTransparency() {
@@ -1038,6 +1056,20 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             button.toolTip = title
             stack.addArrangedSubview(button)
         }
+
+        // Pin / always-on-top toggle — lives ON the window (a thumbtack), not
+        // hidden in the menu bar. Toggling it pins the window above all apps.
+        let pinTitle = LocalizationManager.shared.text("always_on_top")
+        if let image = NSImage(systemSymbolName: "pin", accessibilityDescription: pinTitle) {
+            let pin = NSButton(image: image, target: self, action: #selector(toggleAlwaysOnTop))
+            pin.bezelStyle = .smallSquare
+            pin.setButtonType(.toggle)
+            pin.state = DittoSettings.alwaysOnTop ? .on : .off
+            pin.toolTip = pinTitle
+            pinButton = pin
+            stack.addArrangedSubview(pin)
+        }
+
         return stack
     }
 

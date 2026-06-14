@@ -277,6 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         historyWindowController?.refresh()
         historyWindowController?.showWindow(nil)
         historyWindowController?.window?.makeKeyAndOrderFront(nil)
+        historyWindowController?.applyOnShow()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -567,7 +568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         addItem(menu, title: LocalizationManager.shared.text("import_windows_database"), action: #selector(importWindowsDatabase), key: "")
         addItem(menu, title: LocalizationManager.shared.text("export_history"), action: #selector(exportHistory), key: "")
 
-        let recentEntries = Array(store.snapshotEntries().prefix(10))
+        let recentEntries = Array(store.snapshotEntries().prefix(20))
         if recentEntries.isEmpty == false {
             menu.addItem(.separator())
         }
