@@ -14,12 +14,14 @@ let bg = NSGradient(starting: NSColor(calibratedRed: 0.97, green: 0.97, blue: 0.
                     ending: NSColor(calibratedRed: 0.90, green: 0.92, blue: 0.96, alpha: 1))
 bg?.draw(in: NSRect(x: 0, y: 0, width: w, height: h), angle: -90)
 
-// A large rounded arrow from x=200 -> x=460, centered vertically.
+// Arrow connects the two icon centers: Ditto.app center ≈ (200,200),
+// Applications center ≈ (460,200) in this 660×400 image. The shaft runs from
+// just right of the app icon to just left of the Applications icon.
 let cy: CGFloat = 200
 let arrow = NSBezierPath()
-let startX: CGFloat = 210
-let endX: CGFloat = 450
-let shaftHalf: CGFloat = 26
+let startX: CGFloat = 266
+let endX: CGFloat = 394
+let shaftHalf: CGFloat = 22
 // shaft
 arrow.move(to: NSPoint(x: startX, y: cy - shaftHalf))
 arrow.line(to: NSPoint(x: endX - 70, y: cy - shaftHalf))

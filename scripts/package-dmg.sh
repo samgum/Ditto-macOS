@@ -106,8 +106,8 @@ tell application "Finder"
     set arrangement of opts to not arranged
     set icon size of opts to 128
     set background picture of opts to (POSIX file "$MOUNT/.background/background.png" as alias)
-    set position of item "Ditto.app" of container window to {150, 200}
-    set position of item "Applications" of container window to {510, 200}
+    set position of item "Ditto.app" of container window to {136, 136}
+    set position of item "Applications" of container window to {396, 136}
     set position of item ".background" of container window to {1200, 1200}
     close
     open
