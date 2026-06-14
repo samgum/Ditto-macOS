@@ -54,10 +54,13 @@ if [[ ! -f "$RESOURCES_DIR/AppIcon.icns" ]]; then
 fi
 cp "$RESOURCES_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
-echo "==> Ad-hoc code signing (hardened runtime + entitlements)"
-codesign --force --deep --options runtime \
-  --entitlements "$RESOURCES_DIR/DittoMac.entitlements" \
-  --sign - "$APP_BUNDLE"
+echo "==> Ad-hoc code signing"
+# Plain ad-hoc signature WITHOUT Hardened Runtime. Hardened Runtime + ad-hoc
+# is the documented cause of Accessibility grants not "sticking" on recent
+# macOS — the toggle appears but has no effect, so every synthesized ⌘V
+# re-prompts. A plain ad-hoc signature lets the Accessibility grant apply
+# persistently, so paste works without re-prompting.
+codesign --force --deep --sign - "$APP_BUNDLE"
 echo "    signature:"
 codesign -dv "$APP_BUNDLE" 2>&1 | sed 's/^/    /' || true
 
