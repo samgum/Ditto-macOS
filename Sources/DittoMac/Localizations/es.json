@@ -182,5 +182,6 @@
   "remove_pin": "Desfijar",
   "database_location": "Ubicación de la base",
   "restart_needed": "Reinicia Ditto para aplicar la nueva ubicación.",
-  "check_for_updates": "Buscar actualizaciones al iniciar"
+  "check_for_updates": "Buscar actualizaciones al iniciar",
+  "show_save_animation": "Mostrar animación al guardar"
 }

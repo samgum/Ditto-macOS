@@ -84,8 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             self?.rebuildStatusMenuIfNeeded()
             if let entry = self?.store.snapshotEntries().first {
                 self?.syncCoordinator.broadcast(entry: entry)
-                SaveNotifier.shared.show(entry.preview)
-                SaveAnimation.shared.animate()
+                if DittoSettings.showSaveNotification { SaveNotifier.shared.show(entry.preview) }
+                if DittoSettings.showSaveAnimation { SaveAnimation.shared.animate() }
             }
         }
         monitor.start()

@@ -182,5 +182,6 @@
   "remove_pin": "固定解除",
   "database_location": "データベースの場所",
   "restart_needed": "新しいデータベースの場所を適用するにはDittoを再起動してください。",
-  "check_for_updates": "起動時に更新を確認"
+  "check_for_updates": "起動時に更新を確認",
+  "show_save_animation": "保存アニメーションを表示"
 }

@@ -182,5 +182,6 @@
   "remove_pin": "إلغاء التثبيت",
   "database_location": "موقع قاعدة البيانات",
   "restart_needed": "أعد تشغيل Ditto لتطبيق الموقع الجديد.",
-  "check_for_updates": "التحقق من التحديثات عند التشغيل"
+  "check_for_updates": "التحقق من التحديثات عند التشغيل",
+  "show_save_animation": "إظهار رسوم الحفظ المتحركة"
 }

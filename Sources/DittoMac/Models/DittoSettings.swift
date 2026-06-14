@@ -173,6 +173,11 @@ enum DittoSettings {
         set { defaults.set(newValue, forKey: "Ditto.ShowSaveNotification") }
     }
 
+    static var showSaveAnimation: Bool {
+        get { defaults.bool(forKey: "Ditto.ShowSaveAnimation") }
+        set { defaults.set(newValue, forKey: "Ditto.ShowSaveAnimation") }
+    }
+
     static var checkForUpdates: Bool {
         get { defaults.bool(forKey: "Ditto.CheckForUpdates") }
         set { defaults.set(newValue, forKey: "Ditto.CheckForUpdates") }

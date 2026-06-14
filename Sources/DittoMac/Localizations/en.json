@@ -182,5 +182,6 @@
   "remove_pin": "Unpin",
   "database_location": "Database Location",
   "restart_needed": "Restart Ditto to apply the new database location.",
-  "check_for_updates": "Check for updates on launch"
+  "check_for_updates": "Check for updates on launch",
+  "show_save_animation": "Show save animation"
 }
