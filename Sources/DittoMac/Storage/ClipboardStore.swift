@@ -58,6 +58,7 @@ final class ClipboardStore {
 
     // MARK: - Capture
 
+    @discardableResult
     func addClipboardPayload(
         text: String?,
         rtfData: Data?,
@@ -65,7 +66,7 @@ final class ClipboardStore {
         imageData: Data?,
         fileURLs: [URL],
         sourceApp: String? = nil
-    ) {
+    ) -> ClipboardEntry? {
         lock.lock(); defer { lock.unlock() }
         let normalizedText = text?.trimmingCharacters(in: .whitespacesAndNewlines)
         let files = fileURLs.map { $0.path }
@@ -77,7 +78,7 @@ final class ClipboardStore {
             imageData?.isEmpty == false ||
             files.isEmpty == false
         else {
-            return
+            return nil
         }
 
         // Enforce max clip size (0 = unlimited).
@@ -89,7 +90,7 @@ final class ClipboardStore {
             let imageSize = imageData?.count ?? 0
             let totalSize = textSize + rtfSize + htmlSize + imageSize
             if totalSize > maxSize {
-                return
+                return nil
             }
         }
 
@@ -99,7 +100,7 @@ final class ClipboardStore {
            first.fileURLs == files,
            (files.isEmpty == false || text != nil),
            DittoSettings.allowBackToBackDuplicates == false {
-            return
+            return nil
         }
 
         // Global duplicate suppression.
@@ -128,6 +129,7 @@ final class ClipboardStore {
         repinOrdering()
         trim()
         persist()
+        return entry
     }
 
     // MARK: - Lookups

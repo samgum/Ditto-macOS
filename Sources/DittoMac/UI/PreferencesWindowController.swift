@@ -316,7 +316,12 @@ final class PreferencesWindowController: NSWindowController {
 
     private func networkTab() -> NSView {
         bindCheckbox(syncEnabledButton, default: !DittoSettings.disableReceive || DittoSettings.allowFriends) { [weak self] _ in self?.syncEnabledChanged() }
-        bindCheckbox(syncReceiveButton, default: !DittoSettings.disableReceive) { DittoSettings.disableReceive = !$0 }
+        bindCheckbox(syncReceiveButton, default: !DittoSettings.disableReceive) { [weak self] on in
+            DittoSettings.disableReceive = !on
+            // Restart the coordinator so the receive change takes effect now.
+            self?.syncCoordinator.stop()
+            self?.syncCoordinator.start()
+        }
         portField.target = self
         portField.action = #selector(portChanged)
         passwordField.target = self
@@ -510,7 +515,8 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     @objc private func maxClipSizeChanged() {
-        let value = Int(maxClipSizeField.stringValue) ?? 0
+        let trimmed = maxClipSizeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int(trimmed), value >= 0 else { return } // ignore garbage/empty
         DittoSettings.maxClipSizeBytes = value * 1_000_000
     }
 

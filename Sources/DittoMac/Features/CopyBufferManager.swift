@@ -42,15 +42,16 @@ final class CopyBufferManager {
         let fileURLs = ClipboardMonitor.fileURLs(from: pasteboard)
 
         // Save as a real history entry so it has an id, then bind it to the slot.
-        store.addClipboardPayload(
+        // Bind to the exact entry returned (not entries.first, which races with
+        // concurrent captures).
+        if let entry = store.addClipboardPayload(
             text: text,
             rtfData: rtfData,
             htmlData: htmlData,
             imageData: imageData,
             fileURLs: fileURLs,
             sourceApp: "Copy Buffer \(slot)"
-        )
-        if let entry = store.snapshotEntries().first {
+        ) {
             store.setCopyBuffer(slot: slot, entryId: entry.id)
         }
     }
