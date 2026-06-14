@@ -294,7 +294,9 @@ final class PreferencesWindowController: NSWindowController {
             [label(LocalizationManager.shared.text("diff_app")), diffAppField],
             [label(LocalizationManager.shared.text("translate")), translateUrlField],
             [label(LocalizationManager.shared.text("web_search")), webSearchUrlField],
-            [label(LocalizationManager.shared.text("regex_filters")), regexFiltersField]
+            [label(LocalizationManager.shared.text("regex_filters")), regexFiltersField],
+            [label(LocalizationManager.shared.text("database_location")), databasePathRow()],
+            [NSView(), databaseButtonsRow()]
         ])
     }
 
@@ -617,6 +619,36 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     @objc private func closeWindow() { close() }
+
+    // Database path field + Choose button in one row
+    private func databasePathRow() -> NSView {
+        databasePathField.placeholderString = "~/Library/Application Support/Ditto/Ditto.db"
+        databasePathField.stringValue = DittoSettings.databasePath
+        databasePathField.isEditable = false
+        databasePathField.translatesAutoresizingMaskIntoConstraints = false
+        databaseChooseButton.title = "Choose…"
+        databaseChooseButton.bezelStyle = .rounded
+        databaseChooseButton.target = self
+        databaseChooseButton.action = #selector(chooseDatabaseLocation)
+        databaseChooseButton.translatesAutoresizingMaskIntoConstraints = false
+        let stack = NSStackView(views: [databasePathField, databaseChooseButton])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.distribution = .fill
+        return stack
+    }
+
+    // Backup + Compact buttons in a separate row
+    private func databaseButtonsRow() -> NSView {
+        let backupBtn = NSButton(title: LocalizationManager.shared.text("backup_database"), target: self, action: #selector(backupDatabaseFromPrefs))
+        backupBtn.bezelStyle = .rounded
+        let compactBtn = NSButton(title: LocalizationManager.shared.text("compact_database"), target: self, action: #selector(compactDatabaseFromPrefs))
+        compactBtn.bezelStyle = .rounded
+        let stack = NSStackView(views: [backupBtn, compactBtn])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        return stack
+    }
 
     private func databaseRow() -> NSView {
         databasePathField.placeholderString = "~/Library/Application Support/Ditto/Ditto.db"
