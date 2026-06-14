@@ -28,6 +28,11 @@ enum PasteSimulator {
             NSLog("[Ditto] paste skipped — no target application known")
             return
         }
+        // Per-app paste key override: if the target app has a custom paste key
+        // (e.g. terminals needing Ctrl+V instead of Cmd+V), use it.
+        let bundleId = app.bundleIdentifier
+        let customKey = bundleId.flatMap { DittoSettings.perAppPasteKeys[$0] }.flatMap { HotKey.decode($0) }
+
         DispatchQueue.main.async {
             app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
         }
@@ -39,8 +44,34 @@ enum PasteSimulator {
                 Thread.sleep(forTimeInterval: 0.03)
             }
             Thread.sleep(forTimeInterval: seconds)
-            postCommandV()
+            if let customKey {
+                Self.postKey(customKey)
+            } else {
+                Self.postCommandV()
+            }
         }
+    }
+
+    /// Post an arbitrary key combination (used for per-app paste overrides).
+    static func postKey(_ hotKey: HotKey) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let flags = Self.cgFlags(from: hotKey.modifiers)
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(hotKey.keyCode), keyDown: true)
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(hotKey.keyCode), keyDown: false)
+        keyDown?.flags = flags
+        keyUp?.flags = flags
+        keyDown?.post(tap: .cghidEventTap)
+        keyUp?.post(tap: .cghidEventTap)
+    }
+
+    /// Convert Carbon modifier flags to CGEventFlags.
+    private static func cgFlags(from carbonMods: UInt32) -> CGEventFlags {
+        var flags: CGEventFlags = []
+        if carbonMods & UInt32(cmdKey) != 0 { flags.insert(.maskCommand) }
+        if carbonMods & UInt32(shiftKey) != 0 { flags.insert(.maskShift) }
+        if carbonMods & UInt32(optionKey) != 0 { flags.insert(.maskAlternate) }
+        if carbonMods & UInt32(controlKey) != 0 { flags.insert(.maskControl) }
+        return flags
     }
 
     static func postCommandV() {

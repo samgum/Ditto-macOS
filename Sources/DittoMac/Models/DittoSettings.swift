@@ -99,6 +99,42 @@ enum DittoSettings {
         return URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
     }
 
+    // MARK: - Regex copy filters (skip capturing clips that match)
+
+    static var regexCopyFilters: [String] {
+        get { defaults.stringArray(forKey: "Ditto.RegexCopyFilters") ?? [] }
+        set { defaults.set(newValue, forKey: "Ditto.RegexCopyFilters") }
+    }
+
+    /// Returns true if `text` matches any enabled regex filter (skip capture).
+    static func textMatchesCopyFilter(_ text: String) -> Bool {
+        for pattern in regexCopyFilters {
+            let trimmed = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.isEmpty == false else { continue }
+            if text.range(of: trimmed, options: [.regularExpression, .caseInsensitive]) != nil {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: - Per-app paste key override
+
+    /// Maps bundleId → HotKey.encoded (Int64). If the target app's bundleId is
+    /// here, that key combo is posted instead of ⌘V (for terminals, VMs, etc.).
+    static var perAppPasteKeys: [String: Int64] {
+        get {
+            guard let data = defaults.data(forKey: "Ditto.PerAppPasteKeys"),
+                  let dict = try? JSONDecoder().decode([String: Int64].self, from: data) else { return [:] }
+            return dict
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: "Ditto.PerAppPasteKeys")
+            }
+        }
+    }
+
     static var pollIntervalSeconds: Double {
         get { max(0.1, defaults.object(forKey: Key.pollInterval) as? Double ?? 0.5) }
         set { defaults.set(newValue, forKey: Key.pollInterval) }

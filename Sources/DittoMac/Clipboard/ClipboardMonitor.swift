@@ -69,6 +69,12 @@ final class ClipboardMonitor {
         guard DittoSettings.shouldCapture(bundleId: bundleId) else { return }
 
         let text = pasteboard.string(forType: .string)
+
+        // Regex copy filters — skip capturing clips that match any pattern
+        // (e.g. passwords, tokens, one-time codes).
+        if let text, DittoSettings.textMatchesCopyFilter(text) {
+            return
+        }
         let rtfData = pasteboard.data(forType: .rtf)
         let htmlData = pasteboard.data(forType: .dittoHTML)
         let imageData = ClipboardMonitor.imageData(from: pasteboard)
