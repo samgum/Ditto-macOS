@@ -168,5 +168,6 @@
   "multi_paste_save_new": "Multi-colagem: salvar como novo",
   "regex_case_insensitive": "Regex sem distinguir maiúsculas",
   "copy_buffers_desc": "Os buffers de cópia guardam a área de transferência atual em um slot numerado. Defina um atalho por slot (copiar/colar).",
-  "friends_desc": "Gerencie amigos na barra de menus ▸ Amigos. Esta aba lista os amigos atuais."
+  "friends_desc": "Gerencie amigos na barra de menus ▸ Amigos. Esta aba lista os amigos atuais.",
+  "accessibility_setup_steps": "1. Abra Ajustes do Sistema ▸ Privacidade e Segurança ▸ Acessibilidade.\n2. Se o Ditto já estiver na lista (versão anterior), selecione e clique − para REMOVER.\n3. Clique + e adicione /Applications/Ditto.app.\n4. Ative o interruptor.\nComo cada build é assinado novamente, uma entrada antiga não funciona — após cada atualização, remova e readicione."
 }

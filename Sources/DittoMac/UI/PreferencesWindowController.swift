@@ -84,13 +84,23 @@ final class PreferencesWindowController: NSWindowController {
     required init?(coder: NSCoder) { nil }
 
     func refreshText() {
+        // Fully rebuild the content so EVERY label / checkbox / tab re-renders
+        // in the current language (was only updating the title + popups, so the
+        // window stayed stuck in the language it was first opened in).
+        configureContent()
         window?.title = LocalizationManager.shared.text("preferences")
-        closeButton.title = LocalizationManager.shared.text("close")
         populate()
     }
 
     private func configureContent() {
         guard let window else { return }
+
+        // Make re-runnable: drop any previously-built tabs + checkbox boxes so
+        // refreshText() can rebuild cleanly in a new language.
+        while tabView.numberOfTabViewItems > 0 {
+            tabView.removeTabViewItem(tabView.tabViewItems[0])
+        }
+        checkboxBoxes.removeAll()
 
         tabView.tabViewType = .topTabsBezelBorder
         tabView.translatesAutoresizingMaskIntoConstraints = false

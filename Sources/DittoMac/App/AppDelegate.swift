@@ -354,7 +354,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     @objc func grantAccessibility() {
-        PasteSimulator.promptForAccessibility()
+        // Remind the user (especially after an update) that the old entry must
+        // be removed and the new one added — an ad-hoc signature changes each
+        // build, so a stale entry won't grant. Then open System Settings.
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = LocalizationManager.shared.text("accessibility_required_title")
+        alert.informativeText = LocalizationManager.shared.text("accessibility_setup_steps")
+        alert.addButton(withTitle: LocalizationManager.shared.text("open_system_settings"))
+        alert.addButton(withTitle: LocalizationManager.shared.text("close"))
+        if alert.runModal() == .alertFirstButtonReturn {
+            PasteSimulator.promptForAccessibility()
+        }
     }
 
     private func reregisterHotKeys() {

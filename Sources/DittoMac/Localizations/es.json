@@ -168,5 +168,6 @@
   "multi_paste_save_new": "Multi-pegado: guardar como nuevo",
   "regex_case_insensitive": "Regex sin distinguir mayúsculas",
   "copy_buffers_desc": "Los búferes de copia guardan el portapapeles actual en una ranura numerada. Configura un atajo por ranura (copiar/pegar).",
-  "friends_desc": "Gestiona los amigos en la barra de menús ▸ Amigos. Esta pestaña lista los amigos actuales."
+  "friends_desc": "Gestiona los amigos en la barra de menús ▸ Amigos. Esta pestaña lista los amigos actuales.",
+  "accessibility_setup_steps": "1. Abre Ajustes del Sistema ▸ Privacidad y seguridad ▸ Accesibilidad.\n2. Si Ditto ya está en la lista (versión anterior), selecciónalo y pulsa − para ELIMINARLO.\n3. Pulsa + y añade /Applications/Ditto.app.\n4. Activa el interruptor.\nComo cada compilación se firma de nuevo, una entrada antigua no funciona — tras cada actualización elimina y vuelve a añadir."
 }

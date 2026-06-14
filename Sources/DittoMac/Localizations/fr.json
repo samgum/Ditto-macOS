@@ -168,5 +168,6 @@
   "multi_paste_save_new": "Multi-collage : enregistrer comme nouveau",
   "regex_case_insensitive": "Regex insensible à la casse",
   "copy_buffers_desc": "Les tampons de copie capturent le presse-papiers actuel dans un emplacement numéroté. Définissez un raccourci par emplacement (copier/coller).",
-  "friends_desc": "Gérez les amis dans la barre de menus ▸ Amis. Cet onglet liste les amis actuels."
+  "friends_desc": "Gérez les amis dans la barre de menus ▸ Amis. Cet onglet liste les amis actuels.",
+  "accessibility_setup_steps": "1. Ouvrez Réglages Système ▸ Confidentialité et sécurité ▸ Accessibilité.\n2. Si Ditto est déjà dans la liste (version précédente), sélectionnez-le et cliquez − pour le SUPPRIMER.\n3. Cliquez + et ajoutez /Applications/Ditto.app.\n4. Activez l'interrupteur.\nChaque build étant signé à nouveau, une ancienne entrée ne fonctionne pas — après chaque mise à jour, supprimez et réajoutez."
 }
