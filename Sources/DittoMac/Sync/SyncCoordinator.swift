@@ -18,6 +18,8 @@ final class SyncCoordinator {
     private var incomingConnections: [NWConnection] = []
 
     func start() {
+        // Idempotent: don't stack a second listener if already running.
+        guard listener == nil else { return }
         guard DittoSettings.disableReceive == false else {
             startBroadcastOnly()
             return
@@ -101,19 +103,26 @@ final class SyncCoordinator {
             return
         }
 
-        let rtfBlobKey = payload.rtfData.flatMap { Data(base64Encoded: $0) }.flatMap { self.store?.saveBlob($0, fileExtension: "rtf") }
-        let htmlBlobKey = payload.htmlData.flatMap { Data(base64Encoded: $0) }.flatMap { self.store?.saveBlob($0, fileExtension: "html") }
-        let imageBlobKey = payload.imageData.flatMap { Data(base64Encoded: $0) }.flatMap { self.store?.saveBlob($0, fileExtension: "png") }
+        // Decode payloads once, with a size guard against a malicious/huge
+        // peer payload that would OOM the receiver.
+        let maxBytes = max(DittoSettings.maxClipSizeBytes, 64_000_000)
+        func decode(_ b64: String?) -> Data? {
+            guard let b64, let data = Data(base64Encoded: b64) else { return nil }
+            return data.count <= maxBytes ? data : nil
+        }
+        let rtfData = decode(payload.rtfData)
+        let htmlData = decode(payload.htmlData)
+        let imageData = decode(payload.imageData)
 
+        // addClipboardPayload saves the blobs itself — don't double-save here.
         self.store?.addClipboardPayload(
             text: payload.text,
-            rtfData: payload.rtfData.flatMap { Data(base64Encoded: $0) },
-            htmlData: payload.htmlData.flatMap { Data(base64Encoded: $0) },
-            imageData: payload.imageData.flatMap { Data(base64Encoded: $0) },
+            rtfData: rtfData,
+            htmlData: htmlData,
+            imageData: imageData,
             fileURLs: [],
             sourceApp: header.sender
         )
-        _ = rtfBlobKey; _ = htmlBlobKey; _ = imageBlobKey
 
         DispatchQueue.main.async {
             NotificationCenter.default.post(

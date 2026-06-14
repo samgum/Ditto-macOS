@@ -6,9 +6,15 @@ import Foundation
 /// scaled up and optionally bordered — the macOS equivalent of the Windows
 /// `CreateQRCodeImage` (which shells out to libqrencode).
 enum QRCodeGenerator {
+    /// QR can encode at most ~2953 bytes; refuse empty / oversized text so the
+    /// viewer doesn't show a blank or an unscannably-dense image.
+    static let maxPayloadBytes = 2900
+
     static func image(from text: String, borderPixels: Int = DittoSettings.qrCodeBorderPixels, moduleSize: CGFloat = 10) -> NSImage? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false, trimmed.utf8.count <= maxPayloadBytes else { return nil }
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
-        filter.setValue(text.data(using: .utf8), forKey: "inputMessage")
+        filter.setValue(trimmed.data(using: .utf8), forKey: "inputMessage")
         // High error-correction to match QR_ECLEVEL_H.
         filter.setValue("H", forKey: "inputCorrectionLevel")
 

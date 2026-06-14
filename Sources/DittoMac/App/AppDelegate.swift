@@ -127,6 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     private func applyLayoutDirection() {
+        // Apply to every currently-open window. (NSApp.userInterfaceLayoutDirection
+        // is read-only, so this runs again on language change once windows exist.)
         let direction: NSUserInterfaceLayoutDirection = LocalizationManager.shared.isRTL ? .rightToLeft : .leftToRight
         for window in NSApp.windows {
             window.contentView?.userInterfaceLayoutDirection = direction
@@ -211,6 +213,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     private func pasteSpecificClip(id: UUID) {
         guard let entry = store.entry(id: id) else { return }
+        // Snapshot the user's prior clipboard so we can restore it after the
+        // paste (honors restoreClipboardAfterPaste, same as the other paths).
+        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         store.copyToPasteboard(entry)
         // Sync the monitor's change count so it does NOT re-capture the clip
         // we just placed (otherwise the pasted item appears twice in history).
@@ -222,6 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
         let target = activeAppTracker.previousApplication
         PasteSimulator.paste(into: target)
+        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
     }
 
     private var copyBufferHotKeyIds: [UInt32: (Int, Bool)] = [:]
@@ -574,7 +580,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
         for (index, entry) in recentEntries.enumerated() {
             let prefix = index < 9 ? "\(index + 1)  " : ""
-            let title = "\(prefix)[\(entry.typeLabel)] \(entry.preview)"
+            // Sanitize for a single-line menu title (newlines/tabs break it).
+            let cleanPreview = entry.preview
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\r", with: " ")
+                .replacingOccurrences(of: "\t", with: " ")
+            let title = "\(prefix)[\(entry.typeLabel)] \(cleanPreview)"
             let item = addItem(menu, title: title, action: #selector(copyRecentMenuItem(_:)), key: "")
             item.representedObject = entry.id.uuidString
         }
@@ -602,10 +613,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     // MARK: - HistoryWindowDelegate
 
     func pasteEntryIntoPreviousApp(_ entry: ClipboardEntry, options: SpecialPasteOptions) {
+        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         store.copyToPasteboard(entry, options: options)
         store.markPasted(entry)
         Statistics.shared.recordPaste()
         pasteToPreviousApplication()
+        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
     }
 
     func showProperties(for entry: ClipboardEntry) {

@@ -204,6 +204,13 @@ final class WindowsDittoDatabaseImporter {
 
     private func decodedData(_ row: DataRow, exportedArchive: Bool) throws -> Data {
         guard exportedArchive, let originalSize = row.originalSize else { return row.data }
+        // Cap the allocation — originalSize comes from the imported file
+        // (untrusted), so a huge/garbage value must not cause a multi-GB
+        // allocation or OOM.
+        let maxInflatedSize = 100_000_000 // 100 MB
+        guard originalSize > 0, originalSize <= maxInflatedSize else {
+            throw WindowsDittoDatabaseImportError.inflateFailed
+        }
         var output = Data(count: originalSize)
         let result = output.withUnsafeMutableBytes { outputBuffer in
             row.data.withUnsafeBytes { inputBuffer in

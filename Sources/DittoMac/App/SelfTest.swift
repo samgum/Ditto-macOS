@@ -165,7 +165,7 @@ enum SelfTest {
             let png = Data(pngBytes)
             let store = ClipboardStore(databaseURL: tempDir.appendingPathComponent("img.db"))
             store.addClipboardPayload(text: nil, rtfData: nil, htmlData: nil, imageData: png, fileURLs: [])
-            if let entry = store.entries.first(where: { $0.isImage }) {
+            if let entry = store.snapshotEntries().first(where: { $0.isImage }) {
                 // Exercise the full paste path several times — this used to
                 // SIGSEGV under concurrent DB access.
                 for _ in 0..<10 {

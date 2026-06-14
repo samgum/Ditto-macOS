@@ -279,6 +279,7 @@ final class ClipboardStore {
     }
 
     func setGroup(id: UUID, groupId: Int64?) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].groupId = groupId
         persist()
@@ -304,6 +305,7 @@ final class ClipboardStore {
     }
 
     func moveClip(id: UUID, direction: MoveDirection) {
+        lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         let pinned = entries[index].isPinned
         let samePinned = entries.filter { $0.isPinned == pinned }
@@ -423,7 +425,9 @@ final class ClipboardStore {
     // MARK: - Import / Export
 
     func exportArchive(to url: URL) throws {
-        try database.exportArchive(entries: entries, to: url)
+        // Snapshot under the lock so the writer holds its own COW copy and
+        // can't race a concurrent mutation.
+        try database.exportArchive(entries: snapshotEntries(), to: url)
     }
 
     func importArchive(from url: URL) throws {

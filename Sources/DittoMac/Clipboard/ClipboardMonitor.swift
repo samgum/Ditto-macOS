@@ -21,6 +21,9 @@ final class ClipboardMonitor {
     }
 
     func start() {
+        // Idempotent: never stack a second timer if already running (a future
+        // restart path would otherwise leak the old timer and poll at 2× rate).
+        guard timer == nil else { return }
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + DittoSettings.pollIntervalSeconds, repeating: DittoSettings.pollIntervalSeconds)
         timer.setEventHandler { [weak self] in
