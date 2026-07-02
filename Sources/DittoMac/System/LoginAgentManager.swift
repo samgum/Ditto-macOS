@@ -31,11 +31,15 @@ final class LoginAgentManager {
         guard isBundledApp, let executableURL = Bundle.main.executableURL else { return }
         try? FileManager.default.createDirectory(at: launchAgentsDirectory, withIntermediateDirectories: true)
 
+        // KeepAlive with SuccessfulExit=false: launchd restarts ONLY after a
+        // crash (non-zero exit), NOT after a normal quit. This prevents
+        // multiple Ditto instances from piling up after a reboot or a manual
+        // Quit — the #1 cause of the "apps lose focus" bug.
         let plist: [String: Any] = [
             "Label": label,
             "ProgramArguments": [executableURL.path],
             "RunAtLoad": true,
-            "KeepAlive": true,
+            "KeepAlive": ["SuccessfulExit": false],
             "ProcessType": "Interactive"
         ]
 
@@ -43,6 +47,12 @@ final class LoginAgentManager {
             return
         }
         try? data.write(to: plistURL, options: .atomic)
+
+        // Bootout any previously-loaded instance that used the old KeepAlive
+        // policy, then load the new one.
+        let domain = "gui/\(getuid())"
+        _ = runLaunchctl(arguments: ["bootout", "\(domain)/\(label)"])
+        _ = runLaunchctl(arguments: ["bootstrap", domain, plistURL.path])
     }
 
     func disable() {

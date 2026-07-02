@@ -43,11 +43,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         if DittoSettings.checkForUpdates { checkForUpdates() }
         Self.log("launch begin; pid=\(ProcessInfo.processInfo.processIdentifier); bundle=\(Bundle.main.bundleIdentifier ?? "nil")")
 
-        // Single-instance guard: if another Ditto is already running, activate
-        // it and quit this one (the LaunchAgent / login item can otherwise
-        // spawn duplicates).
+        // Single-instance guard via advisory file lock — bulletproof across
+        // both .app and bare-binary launches. If we can't get the lock,
+        // another instance is already running.
+        if !acquireSingletonLock() {
+            Self.log("another instance holds the singleton lock — exiting")
+            isAlreadyRunning() // try to activate the existing instance
+            NSApp.terminate(nil)
+            return
+        }
+
+        // Fallback: bundle-id check for good measure.
         if isAlreadyRunning() {
-            Self.log("another instance detected — exiting")
+            Self.log("bundle-id duplicate detected — exiting")
             NSApp.terminate(nil)
             return
         }
@@ -106,6 +114,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    // MARK: - Single-instance lock
+
+    /// File handle held for the lifetime of the app to prevent duplicate
+    /// instances. flock(2) is automatically released when the process exits
+    /// (even on crash), so launchd can cleanly start a fresh instance.
+    private var singletonLockFH: FileHandle?
+
+    @discardableResult
+    private func acquireSingletonLock() -> Bool {
+        let lockDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Caches", isDirectory: true)
+        try? FileManager.default.createDirectory(at: lockDir, withIntermediateDirectories: true)
+        let lockURL = lockDir.appendingPathComponent("org.ditto-cp.DittoMac.singleton.lock")
+
+        // open(O_CREAT)
+        FileManager.default.createFile(atPath: lockURL.path, contents: nil)
+        guard let fh = FileHandle(forUpdatingAtPath: lockURL.path) else { return true }
+        singletonLockFH = fh
+
+        // Try non-blocking flock(LOCK_EX | LOCK_NB).
+        let fd = fh.fileDescriptor
+        let result = flock(fd, LOCK_EX | LOCK_NB)
+        if result == 0 {
+            return true  // got the lock
+        }
+        // Couldn't lock — another instance holds it.
+        try? fh.close()
+        singletonLockFH = nil
+        return false
     }
 
     // MARK: - Update checking
