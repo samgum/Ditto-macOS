@@ -46,6 +46,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let countLabel = NSTextField(labelWithString: "")
+    private let emptyStateLabel = NSTextField(wrappingLabelWithString: "")
     private var pinButton: NSButton?
     private let previewPanel = NSTextView()
     private let previewScroll = NSScrollView()
@@ -108,7 +109,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     func refreshText() {
         window?.title = LocalizationManager.shared.text("app_name")
-        searchField.placeholderString = LocalizationManager.shared.text("search")
+        searchField.placeholderString = LocalizationManager.shared.text("search_clips")
+        searchField.toolTip = LocalizationManager.shared.text("search_clips")
+        modePopup.toolTip = LocalizationManager.shared.text("search_mode")
+        typeFilterPopup.toolTip = LocalizationManager.shared.text("type")
+        groupFilterPopup.toolTip = LocalizationManager.shared.text("group")
         rebuildModePopup()
         rebuildTypeFilterPopup()
         rebuildGroupFilterPopup()
@@ -151,8 +156,19 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let total = store.snapshotEntries().count
         if total == 0 {
             countLabel.stringValue = LocalizationManager.shared.text("no_clips")
+            emptyStateLabel.stringValue = LocalizationManager.shared.text("history_empty_message")
+            emptyStateLabel.isHidden = false
+        } else if filteredEntries.isEmpty {
+            countLabel.stringValue = LocalizationManager.shared.text("no_matching_clips")
+            emptyStateLabel.stringValue = LocalizationManager.shared.text("no_matching_clips")
+            emptyStateLabel.isHidden = false
         } else {
-            countLabel.stringValue = "\(filteredEntries.count) / \(total)"
+            countLabel.stringValue = String(
+                format: LocalizationManager.shared.text("clips_count_format"),
+                filteredEntries.count,
+                total
+            )
+            emptyStateLabel.isHidden = true
         }
     }
 
@@ -1015,7 +1031,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.backgroundColor = DittoTheme.current.listBoxOddRowBackground
 
-        searchField.placeholderString = LocalizationManager.shared.text("search")
+        searchField.placeholderString = LocalizationManager.shared.text("search_clips")
+        searchField.toolTip = LocalizationManager.shared.text("search_clips")
+        searchField.setAccessibilityLabel(LocalizationManager.shared.text("search_clips"))
         searchField.delegate = self
         searchField.sendsSearchStringImmediately = true
         searchField.target = self
@@ -1024,16 +1042,22 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         modePopup.target = self
         modePopup.action = #selector(modeChanged)
+        modePopup.toolTip = LocalizationManager.shared.text("search_mode")
+        modePopup.setAccessibilityLabel(LocalizationManager.shared.text("search_mode"))
         modePopup.translatesAutoresizingMaskIntoConstraints = false
         rebuildModePopup()
 
         typeFilterPopup.target = self
         typeFilterPopup.action = #selector(typeFilterChanged)
+        typeFilterPopup.toolTip = LocalizationManager.shared.text("type")
+        typeFilterPopup.setAccessibilityLabel(LocalizationManager.shared.text("type"))
         typeFilterPopup.translatesAutoresizingMaskIntoConstraints = false
         rebuildTypeFilterPopup()
 
         groupFilterPopup.target = self
         groupFilterPopup.action = #selector(groupFilterChanged)
+        groupFilterPopup.toolTip = LocalizationManager.shared.text("group")
+        groupFilterPopup.setAccessibilityLabel(LocalizationManager.shared.text("group"))
         groupFilterPopup.translatesAutoresizingMaskIntoConstraints = false
         rebuildGroupFilterPopup()
 
@@ -1084,6 +1108,13 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         countLabel.textColor = DittoTheme.current.captionText
         countLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        emptyStateLabel.alignment = .center
+        emptyStateLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        emptyStateLabel.textColor = .secondaryLabelColor
+        emptyStateLabel.maximumNumberOfLines = 3
+        emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateLabel.isHidden = true
+
         let toolbar = makeToolbar()
 
         let root = NSView()
@@ -1095,6 +1126,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         root.addSubview(previewScroll)
         root.addSubview(toolbar)
         root.addSubview(countLabel)
+        root.addSubview(emptyStateLabel)
         window.contentView = root
 
         let previewHeight = previewScroll.heightAnchor.constraint(equalToConstant: 0)
@@ -1134,10 +1166,16 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             countLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
             countLabel.bottomAnchor.constraint(equalTo: scrollView.topAnchor, constant: -2),
 
+            emptyStateLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
+            emptyStateLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
+            emptyStateLabel.leadingAnchor.constraint(greaterThanOrEqualTo: scrollView.leadingAnchor, constant: 48),
+            emptyStateLabel.trailingAnchor.constraint(lessThanOrEqualTo: scrollView.trailingAnchor, constant: -48),
+
             toolbar.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
             toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             toolbar.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12)
         ])
+        applySearch()
     }
 
     private func applySelectionColors() {
@@ -1347,6 +1385,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         window?.backgroundColor = theme.mainWindowBackground
         scrollView.backgroundColor = theme.listBoxOddRowBackground
         tableView.backgroundColor = theme.listBoxOddRowBackground
+        countLabel.textColor = theme.captionText
+        emptyStateLabel.textColor = .secondaryLabelColor
         tableView.reloadData()
     }
 }
