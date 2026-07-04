@@ -140,6 +140,21 @@ final class SyncCoordinator {
         sendToFriends(payload: payload, onlyManual: true)
     }
 
+    func send(entry: ClipboardEntry, toFriendId friendId: Int64) {
+        guard let friend = store?.loadFriends().first(where: { $0.id == friendId }) else { return }
+        let payload = ClipPayload(from: entry, store: store)
+        let header = SyncHeader(
+            type: "clip",
+            sender: localIPAddress() ?? "macOS",
+            computerName: Host.current().localizedName ?? "Mac",
+            description: payload.text ?? "Clip",
+            md5: payload.md5(),
+            manualSend: true
+        )
+        guard let message = encode(header: header, payload: payload) else { return }
+        send(to: friend, message: message)
+    }
+
     /// Broadcast the just-captured clip to all "send all" friends.
     func broadcast(entry: ClipboardEntry) {
         guard DittoSettings.allowFriends else { return }

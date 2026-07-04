@@ -15,7 +15,7 @@ protocol HistoryWindowDelegate: AnyObject {
     func webSearchEntry(_ entry: ClipboardEntry)
     func translateEntry(_ entry: ClipboardEntry)
     func emailEntry(_ entry: ClipboardEntry)
-    func sendEntryToFriend(_ entry: ClipboardEntry)
+    func sendEntryToFriend(_ entry: ClipboardEntry, friendId: Int64?)
     func compareEntries(_ entries: [ClipboardEntry])
     func copyEntryToBuffer(_ entry: ClipboardEntry, slot: Int)
 }
@@ -547,12 +547,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     @objc private func sendToFriend() {
         guard let entry = currentEntry else { return }
-        delegate?.sendEntryToFriend(entry)
+        delegate?.sendEntryToFriend(entry, friendId: nil)
     }
 
     @objc private func sendToSpecificFriend(_ sender: NSMenuItem) {
-        guard let entry = currentEntry else { return }
-        delegate?.sendEntryToFriend(entry)
+        guard let entry = currentEntry, let friendId = sender.representedObject as? Int64 else { return }
+        delegate?.sendEntryToFriend(entry, friendId: friendId)
     }
 
     @objc private func shareEntry() {

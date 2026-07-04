@@ -841,11 +841,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     func emailEntry(_ entry: ClipboardEntry) {
         let service = NSSharingService(named: .composeEmail)
         service?.recipients = []
-        service?.perform(withItems: [entry.text ?? entry.preview as NSString])
+        let body = (entry.text?.isEmpty == false ? entry.text : nil) ?? entry.preview
+        service?.perform(withItems: [body as NSString])
     }
 
-    func sendEntryToFriend(_ entry: ClipboardEntry) {
-        syncCoordinator.send(entry: entry)
+    func sendEntryToFriend(_ entry: ClipboardEntry, friendId: Int64?) {
+        if let friendId {
+            syncCoordinator.send(entry: entry, toFriendId: friendId)
+        } else {
+            syncCoordinator.send(entry: entry)
+        }
     }
 
     func compareEntries(_ entries: [ClipboardEntry]) {

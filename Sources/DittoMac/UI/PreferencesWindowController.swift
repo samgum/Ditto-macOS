@@ -160,25 +160,15 @@ final class PreferencesWindowController: NSWindowController {
         hotKeyPopup.action = #selector(hotKeyChanged)
         maxHistoryPopup.target = self
         maxHistoryPopup.action = #selector(maxHistoryChanged)
-        bindCheckbox(openAtLoginButton, default: loginAgent.isEnabled) { [weak self] in self?.toggleLogin($0) }
-        bindCheckbox(playSoundButton, default: DittoSettings.playSoundOnCopy) { DittoSettings.playSoundOnCopy = $0 }
-        bindCheckbox(promptOnDeleteButton, default: DittoSettings.promptWhenDeleting) { DittoSettings.promptWhenDeleting = $0 }
-        bindCheckbox(startupMessageButton, default: DittoSettings.showStartupMessage) { DittoSettings.showStartupMessage = $0 }
-        bindCheckbox(checkUpdatesButton, default: DittoSettings.checkForUpdates) { DittoSettings.checkForUpdates = $0 }
-        bindCheckbox(updateTimeOnPasteButton, default: DittoSettings.updateTimeOnPaste) { DittoSettings.updateTimeOnPaste = $0 }
-        bindCheckbox(hideOnPasteButton, default: DittoSettings.hideDittoOnPaste) { DittoSettings.hideDittoOnPaste = $0 }
-        let restoreClipboardButton = NSButton(checkboxWithTitle: LocalizationManager.shared.text("restore_clipboard_after_paste"), target: nil, action: nil)
-        bindCheckbox(restoreClipboardButton, default: DittoSettings.restoreClipboardAfterPaste) { DittoSettings.restoreClipboardAfterPaste = $0 }
-
-        // Set titles HERE (not in appearanceTab) so they show even if
-        // Appearance tab is never opened.
-        openAtLoginButton.title = LocalizationManager.shared.text("open_at_login")
-        playSoundButton.title = LocalizationManager.shared.text("play_sound_on_copy")
-        promptOnDeleteButton.title = LocalizationManager.shared.text("prompt_on_delete")
-        updateTimeOnPasteButton.title = LocalizationManager.shared.text("update_time_on_paste")
-        hideOnPasteButton.title = LocalizationManager.shared.text("hide_on_paste")
-        startupMessageButton.title = LocalizationManager.shared.text("show_startup_message")
-        checkUpdatesButton.title = LocalizationManager.shared.text("check_for_updates")
+        bindCheckbox(openAtLoginButton, title: LocalizationManager.shared.text("open_at_login"), default: loginAgent.isEnabled) { [weak self] in self?.toggleLogin($0) }
+        bindCheckbox(playSoundButton, title: LocalizationManager.shared.text("play_sound_on_copy"), default: DittoSettings.playSoundOnCopy) { DittoSettings.playSoundOnCopy = $0 }
+        bindCheckbox(promptOnDeleteButton, title: LocalizationManager.shared.text("prompt_on_delete"), default: DittoSettings.promptWhenDeleting) { DittoSettings.promptWhenDeleting = $0 }
+        bindCheckbox(startupMessageButton, title: LocalizationManager.shared.text("show_startup_message"), default: DittoSettings.showStartupMessage) { DittoSettings.showStartupMessage = $0 }
+        bindCheckbox(checkUpdatesButton, title: LocalizationManager.shared.text("check_for_updates"), default: DittoSettings.checkForUpdates) { DittoSettings.checkForUpdates = $0 }
+        bindCheckbox(updateTimeOnPasteButton, title: LocalizationManager.shared.text("update_time_on_paste"), default: DittoSettings.updateTimeOnPaste) { DittoSettings.updateTimeOnPaste = $0 }
+        bindCheckbox(hideOnPasteButton, title: LocalizationManager.shared.text("hide_on_paste"), default: DittoSettings.hideDittoOnPaste) { DittoSettings.hideDittoOnPaste = $0 }
+        let restoreClipboardButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+        bindCheckbox(restoreClipboardButton, title: LocalizationManager.shared.text("restore_clipboard_after_paste"), default: DittoSettings.restoreClipboardAfterPaste) { DittoSettings.restoreClipboardAfterPaste = $0 }
 
         return grid([
             [label(LocalizationManager.shared.text("language")), languagePopup],
@@ -206,15 +196,10 @@ final class PreferencesWindowController: NSWindowController {
         linesPerRowPopup.action = #selector(linesPerRowChanged)
         let alwaysOnTopButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
         let showFirstTenButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
-        bindCheckbox(drawThumbnailsButton, default: DittoSettings.drawThumbnails) { DittoSettings.drawThumbnails = $0 }
-        bindCheckbox(pasteAsPlainTextButton, default: DittoSettings.pasteAsPlainTextByDefault) { DittoSettings.pasteAsPlainTextByDefault = $0 }
-        bindCheckbox(alwaysOnTopButton, default: DittoSettings.alwaysOnTop) { DittoSettings.alwaysOnTop = $0 }
-        bindCheckbox(showFirstTenButton, default: DittoSettings.showFirstTenText) { DittoSettings.showFirstTenText = $0 }
-        alwaysOnTopButton.title = LocalizationManager.shared.text("always_on_top")
-        showFirstTenButton.title = LocalizationManager.shared.text("show_first_ten")
-
-        drawThumbnailsButton.title = LocalizationManager.shared.text("draw_thumbnails")
-        pasteAsPlainTextButton.title = LocalizationManager.shared.text("paste_as_plain_text_default")
+        bindCheckbox(drawThumbnailsButton, title: LocalizationManager.shared.text("draw_thumbnails"), default: DittoSettings.drawThumbnails) { DittoSettings.drawThumbnails = $0 }
+        bindCheckbox(pasteAsPlainTextButton, title: LocalizationManager.shared.text("paste_as_plain_text_default"), default: DittoSettings.pasteAsPlainTextByDefault) { DittoSettings.pasteAsPlainTextByDefault = $0 }
+        bindCheckbox(alwaysOnTopButton, title: LocalizationManager.shared.text("always_on_top"), default: DittoSettings.alwaysOnTop) { DittoSettings.alwaysOnTop = $0 }
+        bindCheckbox(showFirstTenButton, title: LocalizationManager.shared.text("show_first_ten"), default: DittoSettings.showFirstTenText) { DittoSettings.showFirstTenText = $0 }
 
         return grid([
             [label(LocalizationManager.shared.text("theme")), themePopup],
@@ -229,14 +214,10 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     private func searchTab() -> NSView {
-        bindCheckbox(searchDescriptionButton, default: DittoSettings.searchDescription) { DittoSettings.searchDescription = $0 }
-        bindCheckbox(searchFullTextButton, default: DittoSettings.searchFullText) { DittoSettings.searchFullText = $0 }
-        bindCheckbox(searchQuickPasteButton, default: DittoSettings.searchQuickPaste) { DittoSettings.searchQuickPaste = $0 }
-        bindCheckbox(regexCaseInsensitiveButton, default: DittoSettings.regexCaseInsensitive) { DittoSettings.regexCaseInsensitive = $0 }
-        searchDescriptionButton.title = LocalizationManager.shared.text("description")
-        searchFullTextButton.title = LocalizationManager.shared.text("full_text")
-        searchQuickPasteButton.title = LocalizationManager.shared.text("quick_paste_text")
-        regexCaseInsensitiveButton.title = LocalizationManager.shared.text("regex_case_insensitive")
+        bindCheckbox(searchDescriptionButton, title: LocalizationManager.shared.text("description"), default: DittoSettings.searchDescription) { DittoSettings.searchDescription = $0 }
+        bindCheckbox(searchFullTextButton, title: LocalizationManager.shared.text("full_text"), default: DittoSettings.searchFullText) { DittoSettings.searchFullText = $0 }
+        bindCheckbox(searchQuickPasteButton, title: LocalizationManager.shared.text("quick_paste_text"), default: DittoSettings.searchQuickPaste) { DittoSettings.searchQuickPaste = $0 }
+        bindCheckbox(regexCaseInsensitiveButton, title: LocalizationManager.shared.text("regex_case_insensitive"), default: DittoSettings.regexCaseInsensitive) { DittoSettings.regexCaseInsensitive = $0 }
         return grid([
             [label(LocalizationManager.shared.text("search_in")), NSView()],
             [NSView(), searchDescriptionButton],
@@ -253,10 +234,10 @@ final class PreferencesWindowController: NSWindowController {
         includeAppsField.action = #selector(appFilterChanged)
         excludeAppsField.target = self
         excludeAppsField.action = #selector(appFilterChanged)
-        bindCheckbox(enableExpiryButton, default: DittoSettings.checkExpiredEntries) { DittoSettings.checkExpiredEntries = $0 }
-        bindCheckbox(allowDuplicatesButton, default: DittoSettings.allowDuplicates) { DittoSettings.allowDuplicates = $0 }
-        bindCheckbox(multiPasteReverseButton, default: DittoSettings.multiPasteReverse) { DittoSettings.multiPasteReverse = $0 }
-        bindCheckbox(saveMultiPasteButton, default: DittoSettings.saveMultiPaste) { DittoSettings.saveMultiPaste = $0 }
+        bindCheckbox(enableExpiryButton, title: LocalizationManager.shared.text("enable_expiry"), default: DittoSettings.checkExpiredEntries) { DittoSettings.checkExpiredEntries = $0 }
+        bindCheckbox(allowDuplicatesButton, title: LocalizationManager.shared.text("allow_duplicate_clips"), default: DittoSettings.allowDuplicates) { DittoSettings.allowDuplicates = $0 }
+        bindCheckbox(multiPasteReverseButton, title: LocalizationManager.shared.text("multi_paste_reverse"), default: DittoSettings.multiPasteReverse) { DittoSettings.multiPasteReverse = $0 }
+        bindCheckbox(saveMultiPasteButton, title: LocalizationManager.shared.text("multi_paste_save_new"), default: DittoSettings.saveMultiPaste) { DittoSettings.saveMultiPaste = $0 }
         expiryDaysField.target = self
         expiryDaysField.action = #selector(expiryDaysChanged)
         maxClipSizeField.target = self
@@ -275,12 +256,7 @@ final class PreferencesWindowController: NSWindowController {
         regexFiltersField.target = self
         regexFiltersField.action = #selector(regexFiltersChanged)
 
-        enableExpiryButton.title = LocalizationManager.shared.text("enable_expiry")
-        allowDuplicatesButton.title = LocalizationManager.shared.text("allow_duplicate_clips")
-        multiPasteReverseButton.title = LocalizationManager.shared.text("multi_paste_reverse")
-        saveMultiPasteButton.title = LocalizationManager.shared.text("multi_paste_save_new")
-
-        return grid([
+        return scrollableGrid([
             [label(LocalizationManager.shared.text("include_apps")), includeAppsField],
             [label(LocalizationManager.shared.text("exclude_apps")), excludeAppsField],
             [NSView(), enableExpiryButton],
@@ -342,19 +318,16 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     private func networkTab() -> NSView {
-        bindCheckbox(syncEnabledButton, default: !DittoSettings.disableReceive || DittoSettings.allowFriends) { [weak self] _ in self?.syncEnabledChanged() }
-        bindCheckbox(syncReceiveButton, default: !DittoSettings.disableReceive) { [weak self] on in
+        bindCheckbox(syncEnabledButton, title: LocalizationManager.shared.text("sync_enabled"), default: !DittoSettings.disableReceive || DittoSettings.allowFriends) { [weak self] _ in self?.syncEnabledChanged() }
+        bindCheckbox(syncReceiveButton, title: LocalizationManager.shared.text("sync_receive"), default: !DittoSettings.disableReceive) { [weak self] on in
             DittoSettings.disableReceive = !on
-            // Restart the coordinator so the receive change takes effect now.
-            self?.syncCoordinator.stop()
-            self?.syncCoordinator.start()
+            self?.restartSyncIfEnabled()
         }
         portField.target = self
         portField.action = #selector(portChanged)
         passwordField.target = self
         passwordField.action = #selector(passwordChanged)
-        syncEnabledButton.title = LocalizationManager.shared.text("sync_enabled")
-        syncReceiveButton.title = LocalizationManager.shared.text("sync_receive")
+        configureSyncControls()
 
         return grid([
             [NSView(), syncEnabledButton],
@@ -388,11 +361,7 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     private func grid(_ rows: [[NSView]]) -> NSView {
-        let gridView = NSGridView(views: rows)
-        gridView.column(at: 0).xPlacement = .trailing
-        gridView.column(at: 1).xPlacement = .fill
-        gridView.rowSpacing = 10
-        gridView.columnSpacing = 12
+        let gridView = makeGridView(rows)
         let container = NSView()
         container.addSubview(gridView)
         gridView.translatesAutoresizingMaskIntoConstraints = false
@@ -404,7 +373,57 @@ final class PreferencesWindowController: NSWindowController {
         return container
     }
 
-    private func bindCheckbox(_ button: NSButton, default value: Bool, _ handler: @escaping (Bool) -> Void) {
+    private func scrollableGrid(_ rows: [[NSView]]) -> NSView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+
+        let documentView = FlippedPreferencesDocumentView()
+        let gridView = makeGridView(rows)
+        documentView.addSubview(gridView)
+        gridView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            gridView.topAnchor.constraint(equalTo: documentView.topAnchor, constant: 12),
+            gridView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 16),
+            gridView.trailingAnchor.constraint(lessThanOrEqualTo: documentView.trailingAnchor, constant: -16),
+            gridView.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -12)
+        ])
+
+        scrollView.documentView = documentView
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            documentView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
+        ])
+
+        let container = NSView()
+        container.addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+        return container
+    }
+
+    private func makeGridView(_ rows: [[NSView]]) -> NSGridView {
+        let gridView = NSGridView(views: rows)
+        gridView.column(at: 0).xPlacement = .trailing
+        gridView.column(at: 1).xPlacement = .fill
+        gridView.rowSpacing = 10
+        gridView.columnSpacing = 12
+        return gridView
+    }
+
+    private func bindCheckbox(_ button: NSButton, title: String, default value: Bool, _ handler: @escaping (Bool) -> Void) {
+        button.title = title
         button.state = value ? .on : .off
         button.target = self
         let box = CheckboxBox(handler: handler)
@@ -588,8 +607,28 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     @objc private func syncEnabledChanged() {
-        DittoSettings.allowFriends = syncEnabledButton.state == .on
-        if syncEnabledButton.state == .on { syncCoordinator.start() } else { syncCoordinator.stop() }
+        let enabled = syncEnabledButton.state == .on
+        DittoSettings.allowFriends = enabled
+        if enabled {
+            DittoSettings.disableReceive = syncReceiveButton.state != .on
+            restartSyncIfEnabled()
+        } else {
+            syncReceiveButton.state = .off
+            DittoSettings.disableReceive = true
+            syncCoordinator.stop()
+        }
+        configureSyncControls()
+    }
+
+    private func configureSyncControls() {
+        syncReceiveButton.isEnabled = syncEnabledButton.state == .on
+    }
+
+    private func restartSyncIfEnabled() {
+        syncCoordinator.stop()
+        if syncEnabledButton.state == .on {
+            syncCoordinator.start()
+        }
     }
 
     @objc private func portChanged() {
@@ -700,6 +739,10 @@ final class PreferencesWindowController: NSWindowController {
             alert.runModal()
         }
     }
+}
+
+final class FlippedPreferencesDocumentView: NSView {
+    override var isFlipped: Bool { true }
 }
 
 /// Wraps a closure so an `NSButton` checkbox can invoke it via target/action.
