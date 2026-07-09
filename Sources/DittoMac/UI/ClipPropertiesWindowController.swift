@@ -227,6 +227,7 @@ final class ClipPropertiesWindowController: NSWindowController {
         if entry.rtfBlobKey != nil { formats.append("Rich Text Format") }
         if entry.htmlBlobKey != nil { formats.append("HTML Format") }
         if entry.imageBlobKey != nil { formats.append("PNG") }
+        if entry.pdfBlobKey != nil { formats.append("PDF") }
         if let fileURLs = entry.fileURLs { formats.append("Files (\(fileURLs.count))") }
         lines.append("\n\(LocalizationManager.shared.text("type")):")
         lines.append(contentsOf: formats)

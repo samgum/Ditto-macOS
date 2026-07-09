@@ -83,6 +83,7 @@ struct ClipboardEntry: Codable, Equatable {
     var isPinned: Bool { neverAutoDelete || favorite }
 
     var isImage: Bool { imageBlobKey != nil }
+    var isPDF: Bool { pdfBlobKey != nil }
     var isRichText: Bool { rtfBlobKey != nil }
     var isHTML: Bool { htmlBlobKey != nil }
     var isFileDrop: Bool { fileURLs?.isEmpty == false }
@@ -91,6 +92,7 @@ struct ClipboardEntry: Codable, Equatable {
     var typeLabel: String {
         if isFileDrop { return "Files" }
         if isImage { return "Image" }
+        if isPDF { return "PDF" }
         if isRichText { return "RTF" }
         if isHTML { return "HTML" }
         return "Text"

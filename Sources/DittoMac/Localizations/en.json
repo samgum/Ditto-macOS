@@ -187,5 +187,8 @@
   "database_location": "Database Location",
   "restart_needed": "Restart Ditto to apply the new database location.",
   "check_for_updates": "Check for updates on launch",
-  "show_save_animation": "Show save animation"
+  "show_save_animation": "Show save animation",
+  "pdf_clips": "PDF Documents",
+  "export_pdf_file": "Export to PDF File…",
+  "paste_multiple": "Paste Selected"
 }

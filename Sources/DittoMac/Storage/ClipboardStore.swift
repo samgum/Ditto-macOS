@@ -79,6 +79,7 @@ final class ClipboardStore {
             rtfData?.isEmpty == false ||
             htmlData?.isEmpty == false ||
             imageData?.isEmpty == false ||
+            pdfData?.isEmpty == false ||
             files.isEmpty == false
         else {
             return nil
@@ -91,7 +92,8 @@ final class ClipboardStore {
             let rtfSize = rtfData?.count ?? 0
             let htmlSize = htmlData?.count ?? 0
             let imageSize = imageData?.count ?? 0
-            let totalSize = textSize + rtfSize + htmlSize + imageSize
+            let pdfSize = pdfData?.count ?? 0
+            let totalSize = textSize + rtfSize + htmlSize + imageSize + pdfSize
             if totalSize > maxSize {
                 return nil
             }
@@ -103,7 +105,7 @@ final class ClipboardStore {
         // because their text is nil.
         let newCRC = CRC32.checksumCapture(
             text: normalizedText, rtfData: rtfData, htmlData: htmlData,
-            imageData: imageData, fileURLs: files
+            imageData: imageData, pdfData: pdfData, fileURLs: files
         )
 
         // Back-to-back duplicate suppression (identical to the last capture).
@@ -368,33 +370,42 @@ final class ClipboardStore {
 
     // MARK: - Groups
 
-    func addGroup(name: String, parentId: Int64? = nil) {
+    @discardableResult
+    func addGroup(name: String, parentId: Int64? = nil) -> Int64? {
         lock.lock(); defer { lock.unlock() }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return }
+        guard trimmed.isEmpty == false else { return nil }
         let group = ClipGroup(name: trimmed, parentId: parentId)
         do {
             let id = try database.insertGroup(group)
             groups.append(ClipGroup(id: id, name: trimmed, parentId: parentId, sortOrder: group.sortOrder, createdAt: group.createdAt))
             groups.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            return id
         } catch {
             NSLog("Failed to insert group: \(error)")
+            return nil
         }
     }
 
     func renameGroup(id: Int64, name: String) {
         lock.lock(); defer { lock.unlock() }
         guard let index = groups.firstIndex(where: { $0.id == id }) else { return }
-        groups[index].name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return }
+        groups[index].name = trimmed
         try? database.updateGroup(groups[index])
     }
 
     func deleteGroup(id: Int64) {
         lock.lock(); defer { lock.unlock() }
+        guard let deletedGroup = groups.first(where: { $0.id == id }) else { return }
         try? database.deleteGroup(id: id)
         groups.removeAll { $0.id == id }
+        for index in groups.indices where groups[index].parentId == id {
+            groups[index].parentId = deletedGroup.parentId
+        }
         for index in entries.indices where entries[index].groupId == id {
-            entries[index].groupId = nil
+            entries[index].groupId = deletedGroup.parentId
         }
         persist()
     }
@@ -410,7 +421,10 @@ final class ClipboardStore {
         guard let id, let group = snapshot.first(where: { $0.id == id }) else { return nil }
         var names = [group.name]
         var current = group.parentId
-        while let parentId = current, let parent = snapshot.first(where: { $0.id == parentId }), names.contains(parent.name) == false {
+        var visited: Set<Int64> = [group.id]
+        while let parentId = current,
+              let parent = snapshot.first(where: { $0.id == parentId }),
+              visited.insert(parent.id).inserted {
             names.insert(parent.name, at: 0)
             current = parent.parentId
         }
@@ -422,9 +436,11 @@ final class ClipboardStore {
         let snapshot = snapshotGroups()
         var result: [(ClipGroup, Int)] = []
         let byParent: [Int64?: [ClipGroup]] = Dictionary(grouping: snapshot) { $0.parentId }
+        var visited = Set<Int64>()
         func visit(_ parentId: Int64?, depth: Int) {
             let children = (byParent[parentId] ?? []).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             for child in children {
+                guard visited.insert(child.id).inserted else { continue }
                 result.append((child, depth))
                 visit(child.id, depth: depth + 1)
             }
@@ -463,14 +479,24 @@ final class ClipboardStore {
     func exportArchive(to url: URL) throws {
         // Snapshot under the lock so the writer holds its own COW copy and
         // can't race a concurrent mutation.
-        try database.exportArchive(entries: snapshotEntries(), to: url)
+        try database.exportArchive(entries: snapshotEntries(), groups: snapshotGroups(), to: url)
     }
 
     func importArchive(from url: URL) throws {
         let archiveDatabase = try MacClipboardDatabase(url: url, useWAL: false, readOnly: true)
-        let importedEntries = try archiveDatabase.loadEntries()
-        for entry in importedEntries {
-            for key in [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey].compactMap({ $0 }) {
+        let archivedGroups = try archiveDatabase.loadGroups()
+        let groupIDs = importGroups(archivedGroups)
+        var importedEntries = try archiveDatabase.loadEntries()
+        for index in importedEntries.indices {
+            if let groupID = importedEntries[index].groupId {
+                importedEntries[index].groupId = groupIDs[groupID]
+            }
+            for key in [
+                importedEntries[index].rtfBlobKey,
+                importedEntries[index].htmlBlobKey,
+                importedEntries[index].imageBlobKey,
+                importedEntries[index].pdfBlobKey
+            ].compactMap({ $0 }) {
                 guard let data = archiveDatabase.blobData(key: key) else { continue }
                 _ = try? database.saveBlob(data, key: key, fileExtension: "")
             }
@@ -507,6 +533,7 @@ final class ClipboardStore {
             entry.rtfBlobKey == nil ? "" : "rtf",
             entry.htmlBlobKey == nil ? "" : "html",
             entry.imageBlobKey == nil ? "" : "image",
+            entry.pdfBlobKey == nil ? "" : "pdf",
             entry.fileURLs?.joined(separator: "\u{1f}") ?? ""
         ].joined(separator: "\u{1e}")
     }
@@ -533,10 +560,7 @@ final class ClipboardStore {
     // MARK: - Database maintenance
 
     func backupDatabase(to url: URL) throws {
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
-        try FileManager.default.copyItem(at: databaseFileURL, to: url)
+        try database.backup(to: url)
     }
 
     func compactDatabase() {
@@ -586,6 +610,11 @@ final class ClipboardStore {
         return blobData(named: imageBlobKey)
     }
 
+    func pdfData(for entry: ClipboardEntry) -> Data? {
+        guard let pdfBlobKey = entry.pdfBlobKey else { return nil }
+        return blobData(named: pdfBlobKey)
+    }
+
     /// Extracts plain text from RTF/HTML payloads when the entry has none.
     func fullText(for entry: ClipboardEntry) -> String? {
         if let key = entry.rtfBlobKey, let data = blobData(named: key),
@@ -596,6 +625,50 @@ final class ClipboardStore {
             return HTMLTextExtractor.string(from: data)
         }
         return nil
+    }
+
+    /// Import groups before their clips and translate archived IDs to the
+    /// current database's IDs, so importing an archive never creates broken
+    /// group references or collides with a local group's numeric identifier.
+    private func importGroups(_ archivedGroups: [ClipGroup]) -> [Int64: Int64] {
+        lock.lock(); defer { lock.unlock() }
+        var idMap: [Int64: Int64] = [:]
+        var pending = archivedGroups
+
+        while pending.isEmpty == false {
+            var madeProgress = false
+            var remaining: [ClipGroup] = []
+
+            for group in pending {
+                if let parentID = group.parentId, idMap[parentID] == nil {
+                    remaining.append(group)
+                    continue
+                }
+
+                let mappedParentID = group.parentId.flatMap { idMap[$0] }
+                if let existing = groups.first(where: {
+                    $0.parentId == mappedParentID &&
+                    $0.name.localizedCaseInsensitiveCompare(group.name) == .orderedSame
+                }) {
+                    idMap[group.id] = existing.id
+                } else if let newID = addGroup(name: group.name, parentId: mappedParentID) {
+                    idMap[group.id] = newID
+                }
+                madeProgress = true
+            }
+
+            if madeProgress == false {
+                for group in remaining {
+                    if let newID = addGroup(name: group.name, parentId: nil) {
+                        idMap[group.id] = newID
+                    }
+                }
+                break
+            }
+            pending = remaining
+        }
+
+        return idMap
     }
 
     private func trim() {
@@ -652,6 +725,7 @@ final class ClipboardStore {
                 rtfBlobKey: migrateLegacyBlob(legacyEntry.rtfBlobKey, fileExtension: "rtf"),
                 htmlBlobKey: migrateLegacyBlob(legacyEntry.htmlBlobKey, fileExtension: "html"),
                 imageBlobKey: migrateLegacyBlob(legacyEntry.imageBlobKey, fileExtension: "png"),
+                pdfBlobKey: migrateLegacyBlob(legacyEntry.pdfBlobKey, fileExtension: "pdf"),
                 fileURLs: legacyEntry.fileURLs,
                 createdAt: legacyEntry.createdAt,
                 isFavorite: legacyEntry.isFavorite,

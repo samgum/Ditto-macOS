@@ -66,6 +66,12 @@ enum SelfTest {
         check("crc differs for different images", crcImgA != crcImgB)
         check("crc matches for same content", crcImgA == CRC32.checksumCapture(text: nil, rtfData: nil, htmlData: nil, imageData: imgA, fileURLs: []))
         check("crc nonzero for image", crcImgA != 0)
+        let pdfA = Data("first-pdf".utf8)
+        let pdfB = Data("second-pdf".utf8)
+        let crcPdfA = CRC32.checksumCapture(text: nil, rtfData: nil, htmlData: nil, imageData: nil, pdfData: pdfA, fileURLs: [])
+        let crcPdfB = CRC32.checksumCapture(text: nil, rtfData: nil, htmlData: nil, imageData: nil, pdfData: pdfB, fileURLs: [])
+        check("crc differs for different pdfs", crcPdfA != crcPdfB)
+        check("crc nonzero for pdf", crcPdfA != 0)
 
         // MARK: Color detection
         check("hex color #RRGGBB", ColorCodeDetector.color(from: "#ff8800") != nil)
@@ -127,6 +133,11 @@ enum SelfTest {
             check("entry round-trip pinned", loaded.first?.neverAutoDelete == true)
             check("entry round-trip text", loaded.first?.text == "selftest")
 
+            let backupURL = tempDir.appendingPathComponent("Ditto-backup.db")
+            try db.backup(to: backupURL)
+            let backup = try MacClipboardDatabase(url: backupURL)
+            check("database backup round-trip", try backup.loadEntries().first?.text == "selftest")
+
             try db.deleteEntry(id: entry.id)
             check("entry delete", try db.loadEntries().isEmpty)
         } catch {
@@ -159,6 +170,74 @@ enum SelfTest {
             check("windows importer rejects junk", false)
         } catch {
             check("windows importer rejects junk", true)
+        }
+
+        // MARK: PDF-only capture and archive round-trip
+        let originalMaxHistory = DittoSettings.maxHistoryEntries
+        let originalMaxClipSize = DittoSettings.maxClipSizeBytes
+        defer {
+            DittoSettings.maxHistoryEntries = originalMaxHistory
+            DittoSettings.maxClipSizeBytes = originalMaxClipSize
+        }
+        DittoSettings.maxHistoryEntries = 0
+        DittoSettings.maxClipSizeBytes = 0
+        do {
+            let source = ClipboardStore(databaseURL: tempDir.appendingPathComponent("archive-source.db"))
+            guard let sourceEntry = source.addClipboardPayload(
+                text: nil,
+                rtfData: nil,
+                htmlData: nil,
+                imageData: nil,
+                pdfData: pdfA,
+                fileURLs: []
+            ) else {
+                check("pdf-only capture", false)
+                check("archive preserves pdf and group", false)
+                check("sync payload preserves pdf", false)
+                throw MacClipboardDatabaseError.executeFailed("PDF clip was not captured")
+            }
+            check("pdf-only capture", sourceEntry.isPDF)
+            let syncPayload = ClipPayload(from: sourceEntry, store: source)
+            check("sync payload preserves pdf", Data(base64Encoded: syncPayload.pdfData ?? "") == pdfA)
+
+            let groupID = source.addGroup(name: "Archive Group")
+            source.setGroup(id: sourceEntry.id, groupId: groupID)
+
+            if let parentID = source.addGroup(name: "Parent Group"),
+               let childID = source.addGroup(name: "Child Group", parentId: parentID),
+               let groupedEntry = source.addClipboardPayload(
+                   text: "Group reassignment",
+                   rtfData: nil,
+                   htmlData: nil,
+                   imageData: nil,
+                   fileURLs: []
+               ) {
+                source.setGroup(id: groupedEntry.id, groupId: parentID)
+                source.deleteGroup(id: parentID)
+                let child = source.snapshotGroups().first { $0.id == childID }
+                let reassignedEntry = source.entry(id: groupedEntry.id)
+                check("group deletion reparents children", child?.parentId == nil)
+                check("group deletion reparents clips", reassignedEntry?.groupId == nil)
+            } else {
+                check("group deletion reparents children", false)
+                check("group deletion reparents clips", false)
+            }
+
+            let archiveURL = tempDir.appendingPathComponent("history-archive.db")
+            try source.exportArchive(to: archiveURL)
+
+            let destination = ClipboardStore(databaseURL: tempDir.appendingPathComponent("archive-destination.db"))
+            try destination.importArchive(from: archiveURL)
+            let imported = destination.snapshotEntries().first { $0.id == sourceEntry.id }
+            let importedGroupPath = imported.flatMap { destination.groupPath(for: $0.groupId) }
+            check(
+                "archive preserves pdf and group",
+                imported?.isPDF == true &&
+                imported.flatMap { destination.pdfData(for: $0) } == pdfA &&
+                importedGroupPath == "Archive Group"
+            )
+        } catch {
+            check("pdf archive round-trip", false)
         }
 
         // MARK: Image capture + paste path (regression for the SIGSEGV that

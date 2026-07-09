@@ -13,6 +13,11 @@ import Network
 final class SyncCoordinator {
     var store: ClipboardStore?
 
+    private static let maximumHeaderBytes = 64 * 1024
+    private static let maximumPayloadBytes = 86 * 1024 * 1024
+    private static let maximumClipDataBytes = 64 * 1024 * 1024
+    private static let maximumFileURLs = 100
+
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.sync")
     private var incomingConnections: [NWConnection] = []
@@ -105,14 +110,26 @@ final class SyncCoordinator {
 
         // Decode payloads once, with a size guard against a malicious/huge
         // peer payload that would OOM the receiver.
-        let maxBytes = max(DittoSettings.maxClipSizeBytes, 64_000_000)
+        let configuredLimit = DittoSettings.maxClipSizeBytes
+        let maxBytes = configuredLimit > 0
+            ? min(configuredLimit, Self.maximumClipDataBytes)
+            : Self.maximumClipDataBytes
         func decode(_ b64: String?) -> Data? {
             guard let b64, let data = Data(base64Encoded: b64) else { return nil }
             return data.count <= maxBytes ? data : nil
         }
+        guard (payload.text?.utf8.count ?? 0) <= maxBytes else {
+            NSLog("Sync: incoming text payload exceeds the size limit")
+            return
+        }
         let rtfData = decode(payload.rtfData)
         let htmlData = decode(payload.htmlData)
         let imageData = decode(payload.imageData)
+        let pdfData = decode(payload.pdfData)
+        let fileURLs = (payload.fileURLs ?? []).prefix(Self.maximumFileURLs).compactMap { path -> URL? in
+            guard path.utf8.count <= 4_096, path.isEmpty == false else { return nil }
+            return URL(fileURLWithPath: path)
+        }
 
         // addClipboardPayload saves the blobs itself — don't double-save here.
         self.store?.addClipboardPayload(
@@ -120,7 +137,8 @@ final class SyncCoordinator {
             rtfData: rtfData,
             htmlData: htmlData,
             imageData: imageData,
-            fileURLs: [],
+            pdfData: pdfData,
+            fileURLs: fileURLs,
             sourceApp: header.sender
         )
 
@@ -226,6 +244,10 @@ final class SyncCoordinator {
                 return
             }
             let headerLength = headerLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+            guard headerLength > 0, headerLength <= Self.maximumHeaderBytes else {
+                completion(nil, nil)
+                return
+            }
             connection.receive(minimumIncompleteLength: Int(headerLength), maximumLength: Int(headerLength)) { headerData, _, isComplete, error in
                 guard error == nil, isComplete == false, let headerData, headerData.count == Int(headerLength) else {
                     completion(nil, nil)
@@ -237,6 +259,10 @@ final class SyncCoordinator {
                         return
                     }
                     let payloadLength = payloadLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+                    guard payloadLength > 0, payloadLength <= Self.maximumPayloadBytes else {
+                        completion(headerData, nil)
+                        return
+                    }
                     connection.receive(minimumIncompleteLength: Int(payloadLength), maximumLength: Int(payloadLength)) { payloadData, _, _, error in
                         guard error == nil else {
                             completion(headerData, nil)
@@ -297,6 +323,7 @@ struct ClipPayload: Codable {
     var rtfData: String?      // base64
     var htmlData: String?     // base64
     var imageData: String?    // base64
+    var pdfData: String?      // base64
     var fileURLs: [String]?
 
     init(from entry: ClipboardEntry, store: ClipboardStore?) {
@@ -310,11 +337,14 @@ struct ClipPayload: Codable {
         if let key = entry.imageBlobKey, let data = store?.blobData(named: key) {
             imageData = data.base64EncodedString()
         }
+        if let key = entry.pdfBlobKey, let data = store?.blobData(named: key) {
+            pdfData = data.base64EncodedString()
+        }
         fileURLs = entry.fileURLs
     }
 
     func md5() -> String {
-        let raw = (text ?? "") + (rtfData ?? "") + (htmlData ?? "") + (imageData ?? "")
+        let raw = (text ?? "") + (rtfData ?? "") + (htmlData ?? "") + (imageData ?? "") + (pdfData ?? "") + (fileURLs?.joined(separator: "\u{1f}") ?? "")
         let digest = Insecure.MD5.hash(data: Data(raw.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
     }

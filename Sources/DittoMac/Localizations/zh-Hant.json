@@ -187,5 +187,8 @@
   "database_location": "資料庫位置",
   "restart_needed": "重啟 Ditto 以套用新的資料庫位置。",
   "check_for_updates": "啟動時檢查更新",
-  "show_save_animation": "顯示儲存動畫"
+  "show_save_animation": "顯示儲存動畫",
+  "pdf_clips": "PDF 文件",
+  "export_pdf_file": "匯出為 PDF 檔案…",
+  "paste_multiple": "貼上所選項目"
 }

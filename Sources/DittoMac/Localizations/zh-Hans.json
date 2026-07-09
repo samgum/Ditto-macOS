@@ -187,5 +187,8 @@
   "database_location": "数据库位置",
   "restart_needed": "重启 Ditto 以应用新的数据库位置。",
   "check_for_updates": "启动时检查更新",
-  "show_save_animation": "显示保存动画"
+  "show_save_animation": "显示保存动画",
+  "pdf_clips": "PDF 文档",
+  "export_pdf_file": "导出为 PDF 文件…",
+  "paste_multiple": "粘贴所选项目"
 }

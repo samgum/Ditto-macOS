@@ -7,7 +7,6 @@ import Foundation
 /// `RestoreClipboardDelay` (default 750 ms) behaviour.
 final class ClipboardSaveRestore {
     struct Snapshot {
-        let changeCount: Int
         let items: [NSPasteboardItem]
     }
 
@@ -22,18 +21,21 @@ final class ClipboardSaveRestore {
             }
             return copy
         }
-        return Snapshot(changeCount: pasteboard.changeCount, items: items)
+        return Snapshot(items: items)
     }
 
-    static func restore(_ snapshot: Snapshot, afterDelay delay: TimeInterval = 1.2, onRestored: (() -> Void)? = nil) {
+    static func restore(
+        _ snapshot: Snapshot,
+        onlyIfChangeCount expectedChangeCount: Int,
+        afterDelay delay: TimeInterval = 1.2,
+        onRestored: (() -> Void)? = nil
+    ) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let pasteboard = NSPasteboard.general
-            // Only restore if the clipboard hasn't been changed by the user
-            // since the snapshot (otherwise we'd overwrite a fresh copy).
-            guard pasteboard.changeCount >= snapshot.changeCount else {
-                onRestored?()
-                return
-            }
+            // Only restore when Ditto's own pasteboard write is still current.
+            // A different count means the user copied something new after the
+            // paste, and restoring would overwrite that newer clipboard data.
+            guard pasteboard.changeCount == expectedChangeCount else { return }
             pasteboard.clearContents()
             if snapshot.items.isEmpty == false {
                 pasteboard.writeObjects(snapshot.items)

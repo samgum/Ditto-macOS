@@ -187,5 +187,8 @@
   "database_location": "موقع قاعدة البيانات",
   "restart_needed": "أعد تشغيل Ditto لتطبيق الموقع الجديد.",
   "check_for_updates": "التحقق من التحديثات عند التشغيل",
-  "show_save_animation": "إظهار رسوم الحفظ المتحركة"
+  "show_save_animation": "إظهار رسوم الحفظ المتحركة",
+  "pdf_clips": "مستندات PDF",
+  "export_pdf_file": "تصدير إلى ملف PDF…",
+  "paste_multiple": "لصق المحدد"
 }

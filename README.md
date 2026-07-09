@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 Expected self-test result:
 
 ```text
-47 passed, 0 failed
+55 passed, 0 failed
 ```
 
-The self-test covers text transforms, slugify, color detection, search, AES round trips, QR code generation, database round trips, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
+The self-test covers text transforms, slugify, color detection, search, AES round trips, QR code generation, database and SQLite-consistent backup round trips, PDF capture/archive/sync preservation, group reparenting, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
 
 ## Package a DMG
 
@@ -271,7 +271,7 @@ Special paste actions transform the selected clip before paste. They are availab
 
 ### Multi-Paste
 
-Select multiple text clips and paste them as one combined payload. The separator is configurable. The order can be reversed. The combined result can also be saved as a new clip.
+Select multiple text clips and paste them as one combined payload. The separator is configurable. The order can be reversed. The combined result can also be saved as a new clip. Use `Command-Shift-V` or the multi-selection context menu to paste the selected text clips.
 
 ### Groups
 
@@ -360,7 +360,7 @@ The network password must match on both machines. If receive is disabled, Ditto 
 
 ### macOS History Archive
 
-Ditto can export and import a self-contained SQLite archive for this macOS port.
+Ditto can export and import a self-contained SQLite archive for this macOS port. Archives preserve clip payloads including PDF data and retain group hierarchy; imports remap group IDs safely when the destination already has groups.
 
 ### Windows Database Import
 

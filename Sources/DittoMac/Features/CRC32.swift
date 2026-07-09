@@ -17,7 +17,7 @@ enum CRC32 {
         if let text = entry.text, text.isEmpty == false {
             return checksum(Data(text.utf8))
         }
-        for key in [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey].compactMap({ $0 }) {
+        for key in [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey, entry.pdfBlobKey].compactMap({ $0 }) {
             if let data = blobReader(key), data.isEmpty == false {
                 return checksum(data)
             }
@@ -27,9 +27,16 @@ enum CRC32 {
 
     /// Multi-format CRC over every captured format's bytes, matching the
     /// Windows `GenerateCRC` over all formats. Two clips match iff their full
-    /// content (text + RTF + HTML + image + file list) is byte-identical —
+    /// content (text + RTF + HTML + image + PDF + file list) is byte-identical —
     /// so two different screenshots no longer dedup against each other.
-    static func checksumCapture(text: String?, rtfData: Data?, htmlData: Data?, imageData: Data?, fileURLs: [String]) -> Int64 {
+    static func checksumCapture(
+        text: String?,
+        rtfData: Data?,
+        htmlData: Data?,
+        imageData: Data?,
+        pdfData: Data? = nil,
+        fileURLs: [String]
+    ) -> Int64 {
         var combined = Data()
         if let text { combined.append(Data(text.utf8)) }
         combined.append(0xFF)
@@ -38,6 +45,8 @@ enum CRC32 {
         if let htmlData { combined.append(htmlData) }
         combined.append(0xFF)
         if let imageData { combined.append(imageData) }
+        combined.append(0xFF)
+        if let pdfData { combined.append(pdfData) }
         combined.append(0xFF)
         for url in fileURLs { combined.append(Data(url.utf8)); combined.append(0) }
         return combined.isEmpty ? 0 : checksum(combined)

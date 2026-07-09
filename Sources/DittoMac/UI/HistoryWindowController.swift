@@ -12,6 +12,7 @@ protocol HistoryWindowDelegate: AnyObject {
     func showImageViewer(for entry: ClipboardEntry)
     func exportEntryAsText(_ entry: ClipboardEntry)
     func exportEntryAsImage(_ entry: ClipboardEntry)
+    func exportEntryAsPDF(_ entry: ClipboardEntry)
     func webSearchEntry(_ entry: ClipboardEntry)
     func translateEntry(_ entry: ClipboardEntry)
     func emailEntry(_ entry: ClipboardEntry)
@@ -29,7 +30,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     private enum TypeFilter: Equatable {
-        case all, text, images, files, richText, html
+        case all, text, images, files, pdf, richText, html
     }
 
     private let store: ClipboardStore
@@ -58,6 +59,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private var currentTypeFilter: TypeFilter = .all
     private var searchMode: SearchMode = DittoSettings.regexSearch ? .regex : .contains
     private var lastSearchQuery = ""
+    private var fullTextCache: [UUID: String] = [:]
     private var keyEventMonitor: Any?
     private var themeObserver: NSObjectProtocol?
 
@@ -81,7 +83,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         )
         window.title = LocalizationManager.shared.text("app_name")
         window.center()
-        window.minSize = NSSize(width: 560, height: 360)
+        window.minSize = NSSize(width: 640, height: 360)
 
         super.init(window: window)
         filteredEntries = store.snapshotEntries()
@@ -126,8 +128,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     // MARK: - Filtering
 
     private func applySearch() {
+        let selectedIDs = Set(selectedEntries.map(\.id))
+        let allEntries = store.snapshotEntries()
+        let activeIDs = Set(allEntries.map(\.id))
+        fullTextCache = fullTextCache.filter { activeIDs.contains($0.key) }
         let engine = SearchEngine(mode: searchMode, query: searchField.stringValue)
-        filteredEntries = store.snapshotEntries().filter { entry in
+        filteredEntries = allEntries.filter { entry in
             let matchesGroup: Bool
             switch currentGroupFilter {
             case .all: matchesGroup = true
@@ -142,6 +148,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             case .text: matchesType = entry.isText
             case .images: matchesType = entry.isImage
             case .files: matchesType = entry.isFileDrop
+            case .pdf: matchesType = entry.isPDF
             case .richText: matchesType = entry.isRichText
             case .html: matchesType = entry.isHTML
             }
@@ -153,7 +160,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             return matchesGroup && matchesType && matchesSearch
         }
         tableView.reloadData()
-        let total = store.snapshotEntries().count
+        let restoredRows = IndexSet(filteredEntries.enumerated().compactMap { index, entry in
+            selectedIDs.contains(entry.id) ? index : nil
+        })
+        tableView.selectRowIndexes(restoredRows, byExtendingSelection: false)
+
+        let total = allEntries.count
         if total == 0 {
             countLabel.stringValue = LocalizationManager.shared.text("no_clips")
             emptyStateLabel.stringValue = LocalizationManager.shared.text("history_empty_message")
@@ -173,14 +185,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     private func fullText(for entry: ClipboardEntry) -> String? {
-        if let key = entry.rtfBlobKey, let data = store.blobData(named: key),
-           let text = RTFTextExtractor.string(from: data) {
-            return text
+        if let cached = fullTextCache[entry.id] {
+            return cached
         }
-        if let key = entry.htmlBlobKey, let data = store.blobData(named: key) {
-            return HTMLTextExtractor.string(from: data)
-        }
-        return nil
+        guard let text = store.fullText(for: entry), text.isEmpty == false else { return nil }
+        fullTextCache[entry.id] = text
+        return text
     }
 
     // MARK: - Table view
@@ -193,14 +203,24 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         guard row < filteredEntries.count else { return nil }
         let entry = filteredEntries[row]
         let item = NSPasteboardItem()
-        if let text = entry.text { item.setString(text, forType: .string) }
+        var hasItemData = false
+        if let text = entry.text {
+            item.setString(text, forType: .string)
+            hasItemData = true
+        }
         if let imageBlobKey = entry.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
             item.setData(data, forType: .png)
+            hasItemData = true
+        }
+        if let pdfBlobKey = entry.pdfBlobKey, let data = store.blobData(named: pdfBlobKey) {
+            item.setData(data, forType: .pdf)
+            hasItemData = true
         }
         if let fileURLs = entry.fileURLs, fileURLs.isEmpty == false {
             item.setString(fileURLs.first ?? "", forType: .fileURL)
+            hasItemData = true
         }
-        return item.string(forType: .string) != nil || item.data(forType: .png) != nil ? item : nil
+        return hasItemData ? item : nil
     }
 
     // MARK: - Drag IN (drop files/text onto the list)
@@ -240,7 +260,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         if identifier.rawValue == "type" {
             let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView ?? NSTableCellView()
-            configureLabelCell(cell, text: entry.typeLabel)
+            configureLabelCell(cell, text: localizedTypeLabel(for: entry))
             return cell
         }
 
@@ -277,6 +297,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         #selector(moveToTopSelectedEntry), #selector(moveUpSelectedEntry), #selector(moveDownSelectedEntry),
         #selector(moveLastSelectedEntry), #selector(showProperties), #selector(showEditor),
         #selector(showQRCode), #selector(showImageViewer), #selector(exportAsText), #selector(exportAsImage),
+        #selector(exportAsPDF),
         #selector(webSearch), #selector(translate), #selector(emailClip), #selector(sendToFriend),
         #selector(shareEntry)
     ]
@@ -304,6 +325,15 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
                 label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
             ])
         }
+    }
+
+    private func localizedTypeLabel(for entry: ClipboardEntry) -> String {
+        if entry.isFileDrop { return LocalizationManager.shared.text("file_clips") }
+        if entry.isImage { return LocalizationManager.shared.text("image_clips") }
+        if entry.isPDF { return LocalizationManager.shared.text("pdf_clips") }
+        if entry.isRichText { return LocalizationManager.shared.text("rich_text_clips") }
+        if entry.isHTML { return LocalizationManager.shared.text("html_clips") }
+        return LocalizationManager.shared.text("text_clips")
     }
 
     // MARK: - Selection helpers
@@ -341,8 +371,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         case 1: currentTypeFilter = .text
         case 2: currentTypeFilter = .images
         case 3: currentTypeFilter = .files
-        case 4: currentTypeFilter = .richText
-        case 5: currentTypeFilter = .html
+        case 4: currentTypeFilter = .pdf
+        case 5: currentTypeFilter = .richText
+        case 6: currentTypeFilter = .html
         default: currentTypeFilter = .all
         }
         applySearch()
@@ -375,31 +406,34 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     @objc private func pasteSelectedEntry() {
         guard let entry = currentEntry else { return }
-        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         // Honor the "paste as plain text by default" preference.
         var options = SpecialPasteOptions()
         options.pasteAsPlainText = DittoSettings.pasteAsPlainTextByDefault
-        store.copyToPasteboard(entry, options: options)
-        syncMonitor?()
-        store.markPasted(entry)
-        pasteHandler()
-        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.syncMonitor?() } }
-        if DittoSettings.refreshAfterPaste {
-            refresh()
-        }
+        paste(entry, options: options)
     }
 
     @objc private func pasteSpecial(_ sender: NSMenuItem) {
         guard let entry = currentEntry, let box = sender.representedObject as? SpecialPasteOptionsBox else { return }
-        store.copyToPasteboard(entry, options: box.options)
-        store.markPasted(entry)
-        pasteHandler()
+        paste(entry, options: box.options)
     }
 
     @objc private func pasteSpecialNoPaste(_ sender: NSMenuItem) {
         guard let entry = currentEntry, let box = sender.representedObject as? SpecialPasteOptionsBox else { return }
         store.copyToPasteboard(entry, options: box.options)
         syncMonitor?()
+    }
+
+    private func paste(_ entry: ClipboardEntry, options: SpecialPasteOptions = SpecialPasteOptions()) {
+        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
+        store.copyToPasteboard(entry, options: options)
+        let expectedChangeCount = NSPasteboard.general.changeCount
+        syncMonitor?()
+        store.markPasted(entry)
+        pasteHandler()
+        if let snapshot {
+            ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.syncMonitor?() }
+        }
+        if DittoSettings.refreshAfterPaste { refresh() }
     }
 
     @objc private func deleteSelectedEntry() {
@@ -417,14 +451,22 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     @objc private func toggleFavoriteSelectedEntry() {
-        guard let entry = currentEntry else { return }
-        store.toggleFavorite(id: entry.id)
+        let entries = selectedEntries
+        guard entries.isEmpty == false else { return }
+        let shouldFavorite = entries.contains { $0.favorite == false }
+        for entry in entries where entry.favorite != shouldFavorite {
+            store.toggleFavorite(id: entry.id)
+        }
         refresh()
     }
 
     @objc private func toggleNeverAutoDeleteSelectedEntry() {
-        guard let entry = currentEntry else { return }
-        store.toggleNeverAutoDelete(id: entry.id)
+        let entries = selectedEntries
+        guard entries.isEmpty == false else { return }
+        let shouldPin = entries.contains { $0.neverAutoDelete == false }
+        for entry in entries where entry.neverAutoDelete != shouldPin {
+            store.toggleNeverAutoDelete(id: entry.id)
+        }
         refresh()
     }
 
@@ -466,18 +508,24 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     @objc private func setGroupForSelectedEntry(_ sender: NSMenuItem) {
-        guard let entry = currentEntry else { return }
+        let entries = selectedEntries
+        guard entries.isEmpty == false else { return }
+        let groupID: Int64?
         if let groupId = sender.representedObject as? NSNumber {
-            store.setGroup(id: entry.id, groupId: groupId.int64Value)
+            groupID = groupId.int64Value
         } else if sender.tag == -1 {
-            store.setGroup(id: entry.id, groupId: nil)
+            groupID = nil
+        } else {
+            return
         }
+        for entry in entries { store.setGroup(id: entry.id, groupId: groupID) }
         rebuildGroupFilterPopup()
         refresh()
     }
 
     @objc private func setGroupPrompt() {
-        guard let entry = currentEntry else { return }
+        let entries = selectedEntries
+        guard let entry = entries.first else { return }
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("set_group")
         alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
@@ -487,19 +535,18 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         alert.accessoryView = input
         if alert.runModal() == .alertFirstButtonReturn {
             let name = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let groupID: Int64?
             if name.isEmpty {
-                store.setGroup(id: entry.id, groupId: nil)
+                groupID = nil
             } else {
                 let existing = store.snapshotGroups().first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
                 if let existing {
-                    store.setGroup(id: entry.id, groupId: existing.id)
+                    groupID = existing.id
                 } else {
-                    store.addGroup(name: name)
-                    if let created = store.snapshotGroups().first(where: { $0.name == name }) {
-                        store.setGroup(id: entry.id, groupId: created.id)
-                    }
+                    groupID = store.addGroup(name: name)
                 }
             }
+            for selectedEntry in entries { store.setGroup(id: selectedEntry.id, groupId: groupID) }
             rebuildGroupFilterPopup()
             refresh()
         }
@@ -544,6 +591,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     @objc private func exportAsImage() {
         guard let entry = currentEntry else { return }
         delegate?.exportEntryAsImage(entry)
+    }
+
+    @objc private func exportAsPDF() {
+        guard let entry = currentEntry else { return }
+        delegate?.exportEntryAsPDF(entry)
     }
 
     @objc private func webSearch() {
@@ -598,6 +650,26 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         delegate?.compareEntries(entries)
     }
 
+    @objc private func pasteMultipleSelectedEntries() {
+        let entries = selectedEntries
+        guard entries.count >= 2, let combined = store.multiPaste(entries) else {
+            NSSound.beep()
+            return
+        }
+        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(combined, forType: .string)
+        let expectedChangeCount = pasteboard.changeCount
+        syncMonitor?()
+        for entry in entries { store.markPasted(entry) }
+        pasteHandler()
+        if let snapshot {
+            ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.syncMonitor?() }
+        }
+        if DittoSettings.refreshAfterPaste { refresh() }
+    }
+
     @objc private func pasteMultiImages(_ sender: NSMenuItem) {
         let horizontal = sender.tag == 1
         let images = selectedEntries.compactMap { entry -> NSImage? in
@@ -606,10 +678,17 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         }
         guard images.count >= 2, let combined = ImageCompositor.combine(images: images, horizontal: horizontal) else { return }
         let pasteboard = NSPasteboard.general
+        let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         pasteboard.clearContents()
         pasteboard.setData(NSImage.pngData(combined), forType: .png)
+        let expectedChangeCount = pasteboard.changeCount
+        syncMonitor?()
         for entry in selectedEntries { store.markPasted(entry) }
         pasteHandler()
+        if let snapshot {
+            ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.syncMonitor?() }
+        }
+        if DittoSettings.refreshAfterPaste { refresh() }
     }
 
     @objc private func copyToBuffer(_ sender: NSMenuItem) {
@@ -630,7 +709,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     /// just before it opens.
     func menuNeedsUpdate(_ menu: NSMenu) {
         let row = tableView.clickedRow
-        if row >= 0, filteredEntries.indices.contains(row) {
+        if row >= 0, filteredEntries.indices.contains(row), tableView.selectedRowIndexes.contains(row) == false {
             tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
         menu.items = buildContextMenu().items
@@ -662,7 +741,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         menu.addItem(editItem)
 
         if currentEntry?.isImage == true {
-            let imageItem = NSMenuItem(title: LocalizationManager.shared.text("type") + ": " + (currentEntry?.typeLabel ?? ""), action: #selector(showImageViewer), keyEquivalent: "")
+            let imageItem = NSMenuItem(title: LocalizationManager.shared.text("type") + ": " + localizedTypeLabel(for: currentEntry!), action: #selector(showImageViewer), keyEquivalent: "")
             imageItem.target = self
             menu.addItem(imageItem)
         }
@@ -756,6 +835,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         exportImageItem.target = self
         menu.addItem(exportImageItem)
 
+        if currentEntry?.isPDF == true {
+            let exportPDFItem = NSMenuItem(title: LocalizationManager.shared.text("export_pdf_file"), action: #selector(exportAsPDF), keyEquivalent: "")
+            exportPDFItem.target = self
+            menu.addItem(exportPDFItem)
+        }
+
         let searchItem = NSMenuItem(title: LocalizationManager.shared.text("web_search"), action: #selector(webSearch), keyEquivalent: "")
         searchItem.target = self
         menu.addItem(searchItem)
@@ -793,6 +878,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         if selectedEntries.count >= 2 {
             menu.addItem(.separator())
+            if selectedEntries.contains(where: { $0.text?.isEmpty == false }) {
+                let multiPasteItem = NSMenuItem(title: LocalizationManager.shared.text("paste_multiple"), action: #selector(pasteMultipleSelectedEntries), keyEquivalent: "")
+                multiPasteItem.target = self
+                menu.addItem(multiPasteItem)
+            }
             let compareItem = NSMenuItem(title: LocalizationManager.shared.text("compare_clips"), action: #selector(compareSelected), keyEquivalent: "")
             compareItem.target = self
             menu.addItem(compareItem)
@@ -895,9 +985,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             if digit >= 0x30 && digit <= 0x39 {
                 let index = digit == 0x30 ? 9 : Int(digit - 0x31)
                 if let entry = filteredEntries[safe: index] {
-                    store.copyToPasteboard(entry)
-                    store.markPasted(entry)
-                    pasteHandler()
+                    paste(entry)
                 } else {
                     NSSound.beep() // out of range — let the user know
                 }
@@ -905,6 +993,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
                 // text-edit / default handlers, even when out of range.
                 return nil
             }
+        }
+
+        if modifiers == [.command, .shift], event.charactersIgnoringModifiers?.lowercased() == "v" {
+            pasteMultipleSelectedEntries()
+            return nil
         }
 
         if modifiers == .command, let char = event.charactersIgnoringModifiers?.lowercased() {
@@ -1275,7 +1368,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             let attr = NSAttributedString(attachment: attachment)
             previewPanel.textStorage?.setAttributedString(attr)
         } else {
-            previewPanel.string = entry?.text ?? store.fullText(for: entry ?? ClipboardEntry()) ?? ""
+            let content = entry?.text ?? entry.flatMap { store.fullText(for: $0) } ?? ""
+            previewPanel.string = content.isEmpty ? (entry?.preview ?? "") : content
         }
     }
 
@@ -1341,6 +1435,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         typeFilterPopup.addItem(withTitle: LocalizationManager.shared.text("text_clips"))
         typeFilterPopup.addItem(withTitle: LocalizationManager.shared.text("image_clips"))
         typeFilterPopup.addItem(withTitle: LocalizationManager.shared.text("file_clips"))
+        typeFilterPopup.addItem(withTitle: LocalizationManager.shared.text("pdf_clips"))
         typeFilterPopup.addItem(withTitle: LocalizationManager.shared.text("rich_text_clips"))
         typeFilterPopup.addItem(withTitle: LocalizationManager.shared.text("html_clips"))
         switch selected {
@@ -1348,8 +1443,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         case .text: typeFilterPopup.selectItem(at: 1)
         case .images: typeFilterPopup.selectItem(at: 2)
         case .files: typeFilterPopup.selectItem(at: 3)
-        case .richText: typeFilterPopup.selectItem(at: 4)
-        case .html: typeFilterPopup.selectItem(at: 5)
+        case .pdf: typeFilterPopup.selectItem(at: 4)
+        case .richText: typeFilterPopup.selectItem(at: 5)
+        case .html: typeFilterPopup.selectItem(at: 6)
         }
     }
 

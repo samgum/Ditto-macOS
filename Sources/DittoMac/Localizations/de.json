@@ -187,5 +187,8 @@
   "database_location": "Datenbankort",
   "restart_needed": "Starten Sie Ditto neu, um den neuen Ort zu übernehmen.",
   "check_for_updates": "Beim Start nach Updates suchen",
-  "show_save_animation": "Speicheranimation anzeigen"
+  "show_save_animation": "Speicheranimation anzeigen",
+  "pdf_clips": "PDF-Dokumente",
+  "export_pdf_file": "Als PDF-Datei exportieren…",
+  "paste_multiple": "Auswahl einfügen"
 }

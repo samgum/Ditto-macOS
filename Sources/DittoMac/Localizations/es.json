@@ -187,5 +187,8 @@
   "database_location": "Ubicación de la base",
   "restart_needed": "Reinicia Ditto para aplicar la nueva ubicación.",
   "check_for_updates": "Buscar actualizaciones al iniciar",
-  "show_save_animation": "Mostrar animación al guardar"
+  "show_save_animation": "Mostrar animación al guardar",
+  "pdf_clips": "Documentos PDF",
+  "export_pdf_file": "Exportar a archivo PDF…",
+  "paste_multiple": "Pegar seleccionados"
 }

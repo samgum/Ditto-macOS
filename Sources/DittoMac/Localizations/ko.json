@@ -187,5 +187,8 @@
   "database_location": "데이터베이스 위치",
   "restart_needed": "새 데이터베이스 위치를 적용하려면 Ditto를 재시작하세요.",
   "check_for_updates": "실행 시 업데이트 확인",
-  "show_save_animation": "저장 애니메이션 표시"
+  "show_save_animation": "저장 애니메이션 표시",
+  "pdf_clips": "PDF 문서",
+  "export_pdf_file": "PDF 파일로 내보내기…",
+  "paste_multiple": "선택 항목 붙여넣기"
 }

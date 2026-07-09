@@ -289,9 +289,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             if isPaste {
                 let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
                 if let entry = copyBufferManager.paste(slot: slot) {
+                    let expectedChangeCount = NSPasteboard.general.changeCount
                     store.markPasted(entry)
                     pasteToPreviousApplication()
-                    if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
+                    if let snapshot {
+                        ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.monitor?.syncChangeCount() }
+                    }
                 }
             } else {
                 copyBufferManager.captureCurrentClipboard(into: slot)
@@ -312,6 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         // paste (honors restoreClipboardAfterPaste, same as the other paths).
         let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         store.copyToPasteboard(entry)
+        let expectedChangeCount = NSPasteboard.general.changeCount
         // Sync the monitor's change count so it does NOT re-capture the clip
         // we just placed (otherwise the pasted item appears twice in history).
         monitor?.syncChangeCount()
@@ -322,7 +326,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
         let target = activeAppTracker.previousApplication
         PasteSimulator.paste(into: target)
-        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
+        if let snapshot {
+            ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.monitor?.syncChangeCount() }
+        }
     }
 
     private var copyBufferHotKeyIds: [UInt32: (Int, Bool)] = [:]
@@ -634,11 +640,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         guard let slot = sender.representedObject as? NSNumber else { return }
         let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         guard let entry = copyBufferManager.paste(slot: slot.intValue) else { return }
+        let expectedChangeCount = NSPasteboard.general.changeCount
         store.markPasted(entry)
         // pasteToPreviousApplication() already records the paste stat — don't
         // double-count it here.
         pasteToPreviousApplication()
-        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
+        if let snapshot {
+            ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.monitor?.syncChangeCount() }
+        }
     }
 
     @objc private func captureIntoBufferFromMenu(_ sender: NSMenuItem) {
@@ -738,7 +747,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
                 .replacingOccurrences(of: "\n", with: " ")
                 .replacingOccurrences(of: "\r", with: " ")
                 .replacingOccurrences(of: "\t", with: " ")
-            let title = "\(prefix)[\(entry.typeLabel)] \(cleanPreview)"
+            let title = "\(prefix)[\(localizedTypeLabel(for: entry))] \(cleanPreview)"
             let item = addItem(menu, title: title, action: #selector(copyRecentMenuItem(_:)), key: "")
             item.representedObject = entry.id.uuidString
         }
@@ -768,10 +777,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     func pasteEntryIntoPreviousApp(_ entry: ClipboardEntry, options: SpecialPasteOptions) {
         let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
         store.copyToPasteboard(entry, options: options)
+        let expectedChangeCount = NSPasteboard.general.changeCount
         store.markPasted(entry)
         Statistics.shared.recordPaste()
         pasteToPreviousApplication()
-        if let snapshot { ClipboardSaveRestore.restore(snapshot) { [weak self] in self?.monitor?.syncChangeCount() } }
+        if let snapshot {
+            ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.monitor?.syncChangeCount() }
+        }
     }
 
     func showProperties(for entry: ClipboardEntry) {
@@ -828,6 +840,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
     }
 
+    func exportEntryAsPDF(_ entry: ClipboardEntry) {
+        guard let data = store.pdfData(for: entry) else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "clip.pdf"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? data.write(to: url)
+        }
+    }
+
     func webSearchEntry(_ entry: ClipboardEntry) {
         guard let text = entry.text else { return }
         openTemplateURL(DittoSettings.webSearchUrl, query: text)
@@ -872,6 +895,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         if let url = URL(string: urlString) {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    private func localizedTypeLabel(for entry: ClipboardEntry) -> String {
+        if entry.isFileDrop { return LocalizationManager.shared.text("file_clips") }
+        if entry.isImage { return LocalizationManager.shared.text("image_clips") }
+        if entry.isPDF { return LocalizationManager.shared.text("pdf_clips") }
+        if entry.isRichText { return LocalizationManager.shared.text("rich_text_clips") }
+        if entry.isHTML { return LocalizationManager.shared.text("html_clips") }
+        return LocalizationManager.shared.text("text_clips")
     }
 
     private var startupMessageShownKey = "Ditto.StartupMessageShown"

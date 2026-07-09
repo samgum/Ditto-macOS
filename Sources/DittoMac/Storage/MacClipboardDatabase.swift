@@ -314,7 +314,67 @@ final class MacClipboardDatabase {
         )
     }
 
+    /// Make a SQLite-consistent backup, including uncheckpointed WAL pages.
+    /// A filesystem copy of the main database file alone can otherwise miss
+    /// recently committed clips while WAL mode is active.
+    func backup(to url: URL) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+
+        var destination: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &destination, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {
+            let message = destination.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? url.path
+            sqlite3_close(destination)
+            throw MacClipboardDatabaseError.openFailed(message)
+        }
+        defer { sqlite3_close(destination) }
+
+        guard let source = database,
+              let backup = sqlite3_backup_init(destination, "main", source, "main") else {
+            let message = sqlite3_errmsg(destination).map { String(cString: $0) } ?? url.path
+            throw MacClipboardDatabaseError.executeFailed(message)
+        }
+        defer { sqlite3_backup_finish(backup) }
+
+        guard sqlite3_backup_step(backup, -1) == SQLITE_DONE else {
+            let message = sqlite3_errmsg(destination).map { String(cString: $0) } ?? url.path
+            throw MacClipboardDatabaseError.executeFailed(message)
+        }
+    }
+
     // MARK: - Groups
+
+    /// Preserve group IDs in standalone history archives. Archive imports map
+    /// these IDs into the destination database, avoiding collisions there.
+    func replaceGroups(_ groups: [ClipGroup]) throws {
+        try transaction {
+            try execute("DELETE FROM Groups")
+            for group in groups {
+                try execute(
+                    "INSERT INTO Groups(id, name, parentId, sortOrder, createdAt) VALUES (?, ?, ?, ?, ?)",
+                    binds: { statement in
+                        sqlite3_bind_int64(statement, 1, group.id)
+                        sqlite3_bind_text(statement, 2, group.name, -1, databaseTransientDestructor)
+                        if let parentId = group.parentId {
+                            sqlite3_bind_int64(statement, 3, parentId)
+                        } else {
+                            sqlite3_bind_null(statement, 3)
+                        }
+                        sqlite3_bind_double(statement, 4, group.sortOrder)
+                        sqlite3_bind_double(statement, 5, group.createdAt.timeIntervalSince1970)
+                    }
+                )
+            }
+        }
+    }
 
     func loadGroups() throws -> [ClipGroup] {
         try query("SELECT id, name, parentId, sortOrder, createdAt FROM Groups ORDER BY sortOrder DESC, name ASC") { statement in
@@ -525,18 +585,19 @@ final class MacClipboardDatabase {
 
     // MARK: - Export archive
 
-    func exportArchive(entries: [ClipboardEntry], to url: URL) throws {
+    func exportArchive(entries: [ClipboardEntry], groups: [ClipGroup], to url: URL) throws {
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
         let archiveDatabase = try MacClipboardDatabase(url: url, useWAL: false)
         for entry in entries {
-            for key in [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey].compactMap({ $0 }) {
+            for key in [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey, entry.pdfBlobKey].compactMap({ $0 }) {
                 guard let data = blobData(key: key) else { continue }
                 _ = try archiveDatabase.saveBlob(data, key: key, fileExtension: URL(fileURLWithPath: key).pathExtension)
             }
         }
         try archiveDatabase.replaceEntries(entries)
+        try archiveDatabase.replaceGroups(groups)
     }
 
     // MARK: - SQL helpers

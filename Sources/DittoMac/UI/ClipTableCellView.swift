@@ -170,6 +170,7 @@ final class ClipTableCellView: NSTableCellView {
     private static func symbol(for entry: ClipboardEntry) -> String {
         if entry.isFileDrop { return "doc.on.doc" }
         if entry.isImage { return "photo" }
+        if entry.isPDF { return "doc.richtext" }
         if entry.isRichText { return "text.alignleft" }
         if entry.isHTML { return "globe" }
         return "textformat"
