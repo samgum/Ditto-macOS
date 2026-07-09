@@ -190,5 +190,6 @@
   "show_save_animation": "保存アニメーションを表示",
   "pdf_clips": "PDF書類",
   "export_pdf_file": "PDFファイルに書き出す…",
-  "paste_multiple": "選択項目をペースト"
+  "paste_multiple": "選択項目をペースト",
+  "sync_password_required": "同期を有効にする前に LAN 同期用のパスワードを設定してください。"
 }

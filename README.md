@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 Expected self-test result:
 
 ```text
-55 passed, 0 failed
+59 passed, 0 failed
 ```
 
-The self-test covers text transforms, slugify, color detection, search, AES round trips, QR code generation, database and SQLite-consistent backup round trips, PDF capture/archive/sync preservation, group reparenting, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
+The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database and SQLite-consistent backup round trips, PDF capture/archive/sync preservation, group reparenting, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
 
 ## Package a DMG
 
@@ -354,7 +354,7 @@ Manual sending supports:
 
 Broadcast sending can send new copies to friends marked `send all`.
 
-The network password must match on both machines. If receive is disabled, Ditto can still keep outbound settings without opening the listener.
+LAN sync is disabled by default and requires a non-empty network password. The password must match on both machines. Ports are limited to `1024` through `65535`. If receive is disabled, Ditto can still keep outbound settings without opening the listener.
 
 ## Import and Export
 
@@ -373,6 +373,8 @@ Ditto can import Windows Ditto SQLite databases and exported SQLite data. The im
 - `PNG`;
 - `CF_DIB`;
 - `CF_HDROP`.
+
+When the original database contains groups, Ditto recreates the available group hierarchy and assigns imported clips to their mapped groups.
 
 The importer handles zlib-compressed payloads when the source database records an original size.
 

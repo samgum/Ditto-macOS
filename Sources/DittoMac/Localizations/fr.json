@@ -190,5 +190,6 @@
   "show_save_animation": "Afficher l'animation de sauvegarde",
   "pdf_clips": "Documents PDF",
   "export_pdf_file": "Exporter vers un fichier PDF…",
-  "paste_multiple": "Coller la selection"
+  "paste_multiple": "Coller la selection",
+  "sync_password_required": "Definissez un mot de passe de synchronisation LAN avant de l activer."
 }

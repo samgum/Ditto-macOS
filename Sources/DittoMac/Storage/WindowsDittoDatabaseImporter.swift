@@ -9,6 +9,11 @@ enum WindowsDittoDatabaseImportError: Error {
     case inflateFailed
 }
 
+struct WindowsDittoImportResult {
+    let entries: [ClipboardEntry]
+    let groups: [ClipGroup]
+}
+
 /// Imports a Windows Ditto `Ditto.db` (or a Ditto SQLite export) into the
 /// macOS history. Reads the original `Main` and `Data` tables, decompresses
 /// zlib payloads when the export stores `lOriginalSize`, and maps the Win32
@@ -35,6 +40,10 @@ final class WindowsDittoDatabaseImporter {
     }
 
     func importEntries(from url: URL) throws -> [ClipboardEntry] {
+        try importResult(from: url).entries
+    }
+
+    func importResult(from url: URL) throws -> WindowsDittoImportResult {
         let database = try SQLiteDatabase(url: url)
         guard database.hasTable(named: "Main"), database.hasTable(named: "Data") else {
             throw WindowsDittoDatabaseImportError.invalidDatabase
@@ -43,7 +52,8 @@ final class WindowsDittoDatabaseImporter {
         let hasExportOriginalSize = database.hasColumn(named: "lOriginalSize", in: "Data")
         let hasWindowsMainMetadata = database.hasColumn(named: "lDate", in: "Main") &&
             database.hasColumn(named: "bIsGroup", in: "Main")
-        let groups = hasWindowsMainMetadata ? try groupNames(in: database) : [:]
+        let groups = hasWindowsMainMetadata ? try groups(in: database) : []
+        let groupIDs = Set(groups.map(\.id))
         let rows = hasWindowsMainMetadata ? try mainRows(in: database) : try exportedMainRows(in: database)
 
         var entries: [ClipboardEntry] = []
@@ -72,23 +82,34 @@ final class WindowsDittoDatabaseImporter {
                     createdAt: row.createdAt,
                     isFavorite: row.favorite ? true : nil,
                     neverAutoDelete: row.favorite,
-                    groupId: nil
+                    groupId: groupIDs.contains(row.parentID) ? row.parentID : nil
                 )
             )
         }
 
-        return entries.sorted { $0.createdAt > $1.createdAt }
+        return WindowsDittoImportResult(
+            entries: entries.sorted { $0.createdAt > $1.createdAt },
+            groups: groups
+        )
     }
 
-    private func groupNames(in database: SQLiteDatabase) throws -> [Int64: String] {
-        try database.query("SELECT lID, mText FROM Main WHERE bIsGroup = 1") { statement in
-            var values: [Int64: String] = [:]
+    private func groups(in database: SQLiteDatabase) throws -> [ClipGroup] {
+        try database.query("SELECT lID, mText, lParentID FROM Main WHERE bIsGroup = 1") { statement in
+            var rows: [(id: Int64, name: String, parentID: Int64)] = []
             while sqlite3_step(statement) == SQLITE_ROW {
                 let id = sqlite3_column_int64(statement, 0)
                 let name = SQLiteDatabase.string(statement, 1).trimmingCharacters(in: .whitespacesAndNewlines)
-                if name.isEmpty == false { values[id] = name }
+                guard name.isEmpty == false else { continue }
+                rows.append((id, name, sqlite3_column_int64(statement, 2)))
             }
-            return values
+            let ids = Set(rows.map(\.id))
+            return rows.map { row in
+                ClipGroup(
+                    id: row.id,
+                    name: row.name,
+                    parentId: ids.contains(row.parentID) ? row.parentID : nil
+                )
+            }
         }
     }
 

@@ -25,6 +25,10 @@ final class SyncCoordinator {
     func start() {
         // Idempotent: don't stack a second listener if already running.
         guard listener == nil else { return }
+        guard DittoSettings.canUseLANSync else {
+            NSLog("Sync is disabled or has no network password")
+            return
+        }
         guard DittoSettings.disableReceive == false else {
             startBroadcastOnly()
             return
@@ -98,6 +102,7 @@ final class SyncCoordinator {
     }
 
     private func processIncoming(header: SyncHeader, payload: Data) {
+        guard DittoSettings.canUseLANSync, header.type == "clip" else { return }
         let password = DittoSettings.networkPassword
         guard let decrypted = try? AESEncryption.decrypt(payload, password: password) else {
             NSLog("Sync: failed to decrypt incoming payload")
@@ -154,11 +159,13 @@ final class SyncCoordinator {
     // MARK: - Client / send
 
     func send(entry: ClipboardEntry) {
+        guard DittoSettings.canUseLANSync else { return }
         let payload = ClipPayload(from: entry, store: store)
         sendToFriends(payload: payload, onlyManual: true)
     }
 
     func send(entry: ClipboardEntry, toFriendId friendId: Int64) {
+        guard DittoSettings.canUseLANSync else { return }
         guard let friend = store?.loadFriends().first(where: { $0.id == friendId }) else { return }
         let payload = ClipPayload(from: entry, store: store)
         let header = SyncHeader(
@@ -175,7 +182,7 @@ final class SyncCoordinator {
 
     /// Broadcast the just-captured clip to all "send all" friends.
     func broadcast(entry: ClipboardEntry) {
-        guard DittoSettings.allowFriends else { return }
+        guard DittoSettings.canUseLANSync else { return }
         let friends = store?.loadFriends().filter(\.sendAll) ?? []
         guard friends.isEmpty == false else { return }
         let payload = ClipPayload(from: entry, store: store)
@@ -344,7 +351,15 @@ struct ClipPayload: Codable {
     }
 
     func md5() -> String {
-        let raw = (text ?? "") + (rtfData ?? "") + (htmlData ?? "") + (imageData ?? "") + (pdfData ?? "") + (fileURLs?.joined(separator: "\u{1f}") ?? "")
+        let parts = [
+            text ?? "",
+            rtfData ?? "",
+            htmlData ?? "",
+            imageData ?? "",
+            pdfData ?? "",
+            fileURLs?.joined(separator: "\u{1f}") ?? ""
+        ]
+        let raw = parts.joined()
         let digest = Insecure.MD5.hash(data: Data(raw.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
     }

@@ -318,7 +318,7 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     private func networkTab() -> NSView {
-        bindCheckbox(syncEnabledButton, title: LocalizationManager.shared.text("sync_enabled"), default: !DittoSettings.disableReceive || DittoSettings.allowFriends) { [weak self] _ in self?.syncEnabledChanged() }
+        bindCheckbox(syncEnabledButton, title: LocalizationManager.shared.text("sync_enabled"), default: DittoSettings.allowFriends) { [weak self] _ in self?.syncEnabledChanged() }
         bindCheckbox(syncReceiveButton, title: LocalizationManager.shared.text("sync_receive"), default: !DittoSettings.disableReceive) { [weak self] on in
             DittoSettings.disableReceive = !on
             self?.restartSyncIfEnabled()
@@ -608,6 +608,17 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func syncEnabledChanged() {
         let enabled = syncEnabledButton.state == .on
+        if enabled && DittoSettings.networkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            syncEnabledButton.state = .off
+            DittoSettings.allowFriends = false
+            syncCoordinator.stop()
+            let alert = NSAlert()
+            alert.messageText = LocalizationManager.shared.text("sync_password_required")
+            alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
+            alert.runModal()
+            configureSyncControls()
+            return
+        }
         DittoSettings.allowFriends = enabled
         if enabled {
             DittoSettings.disableReceive = syncReceiveButton.state != .on
@@ -632,7 +643,12 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     @objc private func portChanged() {
-        if let value = Int(portField.stringValue) { DittoSettings.sendRecvPort = value }
+        guard let value = Int(portField.stringValue), (1_024...65_535).contains(value) else {
+            portField.stringValue = "\(DittoSettings.sendRecvPort)"
+            return
+        }
+        DittoSettings.sendRecvPort = value
+        restartSyncIfEnabled()
     }
 
     @objc private func passwordChanged() {

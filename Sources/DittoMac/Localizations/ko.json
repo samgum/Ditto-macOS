@@ -190,5 +190,6 @@
   "show_save_animation": "저장 애니메이션 표시",
   "pdf_clips": "PDF 문서",
   "export_pdf_file": "PDF 파일로 내보내기…",
-  "paste_multiple": "선택 항목 붙여넣기"
+  "paste_multiple": "선택 항목 붙여넣기",
+  "sync_password_required": "동기화를 켜기 전에 LAN 동기화 비밀번호를 설정하세요."
 }

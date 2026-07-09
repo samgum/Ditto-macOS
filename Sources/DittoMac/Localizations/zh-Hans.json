@@ -190,5 +190,6 @@
   "show_save_animation": "显示保存动画",
   "pdf_clips": "PDF 文档",
   "export_pdf_file": "导出为 PDF 文件…",
-  "paste_multiple": "粘贴所选项目"
+  "paste_multiple": "粘贴所选项目",
+  "sync_password_required": "启用局域网同步前，请先设置同步密码。"
 }

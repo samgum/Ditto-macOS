@@ -190,5 +190,6 @@
   "show_save_animation": "顯示儲存動畫",
   "pdf_clips": "PDF 文件",
   "export_pdf_file": "匯出為 PDF 檔案…",
-  "paste_multiple": "貼上所選項目"
+  "paste_multiple": "貼上所選項目",
+  "sync_password_required": "啟用區域網路同步前，請先設定同步密碼。"
 }

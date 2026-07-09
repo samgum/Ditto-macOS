@@ -203,6 +203,7 @@ final class LocalizationManager {
         "sync_enabled": "Enable LAN sync",
         "sync_port": "Port",
         "sync_password": "Password",
+        "sync_password_required": "Set a LAN sync password before enabling sync.",
         "sync_receive": "Allow incoming clips",
         "friend_name": "Name",
         "friend_ip": "IP Address",

@@ -86,15 +86,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         Self.log("login agent installed")
 
         let monitor = ClipboardMonitor(store: store)
-        monitor.onChange = { [weak self] in
+        monitor.onChange = { [weak self] entry in
             Statistics.shared.recordCopy()
             self?.historyWindowController?.refresh()
             self?.rebuildStatusMenuIfNeeded()
-            if let entry = self?.store.snapshotEntries().first {
-                self?.syncCoordinator.broadcast(entry: entry)
-                if DittoSettings.showSaveNotification { SaveNotifier.shared.show(entry.preview) }
-                if DittoSettings.showSaveAnimation { SaveAnimation.shared.animate() }
-            }
+            self?.syncCoordinator.broadcast(entry: entry)
+            if DittoSettings.showSaveNotification { SaveNotifier.shared.show(entry.preview) }
+            if DittoSettings.showSaveAnimation { SaveAnimation.shared.animate() }
         }
         monitor.start()
         self.monitor = monitor

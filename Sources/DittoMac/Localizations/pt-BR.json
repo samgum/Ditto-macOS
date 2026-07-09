@@ -190,5 +190,6 @@
   "show_save_animation": "Mostrar animação ao salvar",
   "pdf_clips": "Documentos PDF",
   "export_pdf_file": "Exportar para arquivo PDF…",
-  "paste_multiple": "Colar selecionados"
+  "paste_multiple": "Colar selecionados",
+  "sync_password_required": "Defina uma senha de sincronizacao LAN antes de ativar a sincronizacao."
 }

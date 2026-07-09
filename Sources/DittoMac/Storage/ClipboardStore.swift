@@ -509,7 +509,14 @@ final class ClipboardStore {
         let importer = WindowsDittoDatabaseImporter { [weak self] data, fileExtension in
             self?.saveBlob(data, fileExtension: fileExtension)
         }
-        let importedEntries = try importer.importEntries(from: url)
+        let result = try importer.importResult(from: url)
+        let groupIDs = importGroups(result.groups)
+        var importedEntries = result.entries
+        for index in importedEntries.indices {
+            if let groupID = importedEntries[index].groupId {
+                importedEntries[index].groupId = groupIDs[groupID]
+            }
+        }
         mergeImportedEntries(importedEntries)
         return importedEntries.count
     }

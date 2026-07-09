@@ -190,5 +190,6 @@
   "show_save_animation": "إظهار رسوم الحفظ المتحركة",
   "pdf_clips": "مستندات PDF",
   "export_pdf_file": "تصدير إلى ملف PDF…",
-  "paste_multiple": "لصق المحدد"
+  "paste_multiple": "لصق المحدد",
+  "sync_password_required": "عيّن كلمة مرور لمزامنة الشبكة المحلية قبل تفعيل المزامنة."
 }

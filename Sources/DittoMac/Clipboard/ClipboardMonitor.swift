@@ -13,7 +13,7 @@ final class ClipboardMonitor {
     private var lastChangeCount: Int
     private var timer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.clipboard", qos: .userInitiated)
-    var onChange: (() -> Void)?
+    var onChange: ((ClipboardEntry) -> Void)?
 
     init(store: ClipboardStore) {
         self.store = store
@@ -81,7 +81,7 @@ final class ClipboardMonitor {
         let pdfData = pasteboard.data(forType: .pdf)
         let fileURLs = ClipboardMonitor.fileURLs(from: pasteboard)
 
-        store.addClipboardPayload(
+        guard let entry = store.addClipboardPayload(
             text: text,
             rtfData: rtfData,
             htmlData: htmlData,
@@ -89,10 +89,12 @@ final class ClipboardMonitor {
             pdfData: pdfData,
             fileURLs: fileURLs,
             sourceApp: appName
-        )
+        ) else {
+            return
+        }
 
         DispatchQueue.main.async { [weak self] in
-            self?.onChange?()
+            self?.onChange?(entry)
         }
 
         if DittoSettings.playSoundOnCopy {

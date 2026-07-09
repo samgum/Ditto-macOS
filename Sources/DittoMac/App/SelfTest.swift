@@ -108,6 +108,28 @@ enum SelfTest {
             check("aes wrong password rejected", false)
         }
 
+        // MARK: LAN sync safety defaults
+        let originalSyncEnabled = DittoSettings.allowFriends
+        let originalSyncPassword = DittoSettings.networkPassword
+        let originalSyncPort = DittoSettings.sendRecvPort
+        defer {
+            DittoSettings.allowFriends = originalSyncEnabled
+            DittoSettings.networkPassword = originalSyncPassword
+            DittoSettings.sendRecvPort = originalSyncPort
+        }
+        DittoSettings.allowFriends = false
+        DittoSettings.networkPassword = "configured-password"
+        check("sync disabled by master switch", DittoSettings.canUseLANSync == false)
+        DittoSettings.allowFriends = true
+        DittoSettings.networkPassword = ""
+        check("sync requires password", DittoSettings.canUseLANSync == false)
+        DittoSettings.networkPassword = "configured-password"
+        check("sync enabled with password", DittoSettings.canUseLANSync)
+        DittoSettings.sendRecvPort = 1
+        let lowPortIsClamped = DittoSettings.sendRecvPort == 1_024
+        DittoSettings.sendRecvPort = 70_000
+        check("sync port is clamped", lowPortIsClamped && DittoSettings.sendRecvPort == 65_535)
+
         // MARK: QR code
         if let image = QRCodeGenerator.image(from: "https://github.com/samgum/Ditto-macOS", borderPixels: 0, moduleSize: 8) {
             check("qr image non-empty", image.size.width > 0 && image.size.height > 0)

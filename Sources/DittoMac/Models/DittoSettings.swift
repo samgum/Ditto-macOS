@@ -409,13 +409,18 @@ enum DittoSettings {
 
     // MARK: - Network
 
+    static let defaultSyncPort = 23_443
+
     static var sendRecvPort: Int {
-        get { defaults.object(forKey: Key.sendRecvPort) as? Int ?? 23443 }
-        set { defaults.set(newValue, forKey: Key.sendRecvPort) }
+        get {
+            let stored = defaults.object(forKey: Key.sendRecvPort) as? Int ?? defaultSyncPort
+            return min(65_535, max(1_024, stored))
+        }
+        set { defaults.set(min(65_535, max(1_024, newValue)), forKey: Key.sendRecvPort) }
     }
 
     static var networkPassword: String {
-        get { defaults.string(forKey: Key.networkPassword) ?? "LetMeIn" }
+        get { defaults.string(forKey: Key.networkPassword) ?? "" }
         set { defaults.set(newValue, forKey: Key.networkPassword) }
     }
 
@@ -425,8 +430,12 @@ enum DittoSettings {
     }
 
     static var allowFriends: Bool {
-        get { defaults.object(forKey: Key.allowFriends) == nil ? true : defaults.bool(forKey: Key.allowFriends) }
+        get { defaults.object(forKey: Key.allowFriends) == nil ? false : defaults.bool(forKey: Key.allowFriends) }
         set { defaults.set(newValue, forKey: Key.allowFriends) }
+    }
+
+    static var canUseLANSync: Bool {
+        allowFriends && networkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     static var showReceivedClipNotification: Bool {

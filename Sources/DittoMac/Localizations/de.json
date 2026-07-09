@@ -190,5 +190,6 @@
   "show_save_animation": "Speicheranimation anzeigen",
   "pdf_clips": "PDF-Dokumente",
   "export_pdf_file": "Als PDF-Datei exportieren…",
-  "paste_multiple": "Auswahl einfügen"
+  "paste_multiple": "Auswahl einfügen",
+  "sync_password_required": "Lege vor dem Aktivieren der LAN-Synchronisierung ein Passwort fest."
 }
