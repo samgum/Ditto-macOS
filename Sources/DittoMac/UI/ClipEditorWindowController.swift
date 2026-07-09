@@ -12,6 +12,8 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
     private let saveAndClipboardButton = NSButton(title: "", target: nil, action: nil)
     private let closeButton = NSButton(title: "", target: nil, action: nil)
 
+    var syncMonitor: (() -> Void)?
+
     init(store: ClipboardStore, entry: ClipboardEntry, onChanged: @escaping () -> Void) {
         self.store = store
         self.entry = entry
@@ -105,5 +107,6 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
     @objc private func saveAndPutOnClipboard() {
         save()
         store.copyToPasteboard(entry)
+        syncMonitor?()
     }
 }

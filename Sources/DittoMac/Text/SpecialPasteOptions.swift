@@ -40,6 +40,7 @@ struct SpecialPasteOptions {
         var rtfBlobKey: String?
         var htmlBlobKey: String?
         var imageBlobKey: String?
+        var pdfBlobKey: String?
         var fileURLs: [String]?
         var stripFormatting: Bool
         var imageRepresentation: Data?
@@ -49,7 +50,7 @@ struct SpecialPasteOptions {
         if generateGuid {
             return Result(
                 text: TextTransforms.generateGUID(),
-                rtfBlobKey: nil, htmlBlobKey: nil, imageBlobKey: nil, fileURLs: nil,
+                rtfBlobKey: nil, htmlBlobKey: nil, imageBlobKey: nil, pdfBlobKey: nil, fileURLs: nil,
                 stripFormatting: true, imageRepresentation: nil
             )
         }
@@ -115,6 +116,7 @@ struct SpecialPasteOptions {
             rtfBlobKey: stripFormatting ? nil : entry.rtfBlobKey,
             htmlBlobKey: stripFormatting ? nil : entry.htmlBlobKey,
             imageBlobKey: pasteAsImage ? nil : entry.imageBlobKey,
+            pdfBlobKey: stripFormatting ? nil : entry.pdfBlobKey,
             fileURLs: limitsFormatsToText ? nil : entry.fileURLs,
             stripFormatting: stripFormatting,
             imageRepresentation: imageRepresentation

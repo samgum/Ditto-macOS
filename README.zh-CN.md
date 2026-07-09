@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 期望自测结果：
 
 ```text
-59 passed, 0 failed
+62 passed, 0 failed
 ```
 
-自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库与 SQLite 一致性备份往返、PDF 捕获/归档/同步保真、分组重挂、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
+自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库与 SQLite 一致性备份往返、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
 
 ## 打包 DMG
 

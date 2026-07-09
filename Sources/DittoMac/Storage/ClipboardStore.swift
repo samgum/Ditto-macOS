@@ -172,7 +172,13 @@ final class ClipboardStore {
     func update(_ entry: ClipboardEntry) {
         lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
+        let oldBlobKeys = Set(blobKeys(for: entries[index]))
         entries[index] = entry
+        let currentBlobKeys = Set(entries.flatMap(blobKeys(for:)))
+        let obsoleteBlobKeys = oldBlobKeys
+            .subtracting(Set(blobKeys(for: entry)))
+            .subtracting(currentBlobKeys)
+        database.removeBlobs(keys: Array(obsoleteBlobKeys))
         persist()
     }
 
@@ -237,7 +243,7 @@ final class ClipboardStore {
             pasteboardItems.append(imageItem)
         }
 
-        if let pdfBlobKey = entry.pdfBlobKey, let data = blobData(named: pdfBlobKey) {
+        if let pdfBlobKey = transformed.pdfBlobKey, let data = blobData(named: pdfBlobKey) {
             let pdfItem = NSPasteboardItem()
             pdfItem.setData(data, forType: .pdf)
             pasteboardItems.append(pdfItem)
@@ -549,10 +555,6 @@ final class ClipboardStore {
 
     func removeAll() {
         lock.lock(); defer { lock.unlock() }
-        // Free the blobs of every entry before clearing.
-        for entry in entries {
-            removeBlobFiles(for: entry)
-        }
         entries.removeAll()
         groups.removeAll()
         try? database.removeAll()
@@ -594,9 +596,12 @@ final class ClipboardStore {
     private func removeEntries(where predicate: (ClipboardEntry) -> Bool) {
         let removed = entries.filter(predicate)
         for entry in removed {
-            removeBlobFiles(for: entry)
+            try? database.clearCopyBufferReferences(for: entry.id)
         }
         entries.removeAll(where: predicate)
+        let referencedBlobKeys = Set(entries.flatMap(blobKeys(for:)))
+        let removedBlobKeys = Set(removed.flatMap(blobKeys(for:))).subtracting(referencedBlobKeys)
+        database.removeBlobs(keys: Array(removedBlobKeys))
     }
 
     func saveBlob(_ data: Data?, fileExtension: String) -> String? {
@@ -608,8 +613,8 @@ final class ClipboardStore {
         database.blobData(key: key)
     }
 
-    private func removeBlobFiles(for entry: ClipboardEntry) {
-        database.removeBlobs(keys: [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey, entry.pdfBlobKey].compactMap { $0 })
+    private func blobKeys(for entry: ClipboardEntry) -> [String] {
+        [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey, entry.pdfBlobKey].compactMap { $0 }
     }
 
     func imageData(for entry: ClipboardEntry) -> Data? {
@@ -687,11 +692,8 @@ final class ClipboardStore {
         let nonPinned = entries.filter { $0.isPinned == false }
         if nonPinned.count > nonPinnedBudget {
             let toRemove = Array(nonPinned.suffix(nonPinned.count - nonPinnedBudget))
-            for entry in toRemove {
-                removeBlobFiles(for: entry)
-            }
             let removeIds = Set(toRemove.map(\.id))
-            entries.removeAll { removeIds.contains($0.id) }
+            removeEntries { removeIds.contains($0.id) }
         }
     }
 

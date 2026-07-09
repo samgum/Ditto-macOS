@@ -495,7 +495,15 @@ final class MacClipboardDatabase {
             try execute("DELETE FROM ClipboardEntries")
             try execute("DELETE FROM ClipBlobs")
             try execute("DELETE FROM Groups")
+            try execute("DELETE FROM CopyBuffers")
         }
+    }
+
+    func clearCopyBufferReferences(for entryID: UUID) throws {
+        try execute(
+            "DELETE FROM CopyBuffers WHERE entryId = ?",
+            binds: { sqlite3_bind_text($0, 1, entryID.uuidString, -1, databaseTransientDestructor) }
+        )
     }
 
     func vacuum() throws {

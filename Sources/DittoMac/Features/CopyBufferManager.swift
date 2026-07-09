@@ -58,6 +58,7 @@ final class CopyBufferManager {
         let rtfData = pasteboard.data(forType: .rtf)
         let htmlData = pasteboard.data(forType: .dittoHTML)
         let imageData = ClipboardMonitor.imageData(from: pasteboard)
+        let pdfData = pasteboard.data(forType: .pdf)
         let fileURLs = ClipboardMonitor.fileURLs(from: pasteboard)
 
         // Save as a real history entry so it has an id, then bind it to the slot.
@@ -68,6 +69,7 @@ final class CopyBufferManager {
             rtfData: rtfData,
             htmlData: htmlData,
             imageData: imageData,
+            pdfData: pdfData,
             fileURLs: fileURLs,
             sourceApp: "Copy Buffer \(slot)"
         ) {

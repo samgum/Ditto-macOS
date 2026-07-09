@@ -794,11 +794,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     func showEditor(for entry: ClipboardEntry) {
-        editorWindowController = ClipEditorWindowController(store: store, entry: entry) { [weak self] in
+        let controller = ClipEditorWindowController(store: store, entry: entry) { [weak self] in
             self?.historyWindowController?.refresh()
         }
-        editorWindowController?.showWindow(nil)
-        editorWindowController?.window?.makeKeyAndOrderFront(nil)
+        controller.syncMonitor = { [weak self] in self?.monitor?.syncChangeCount() }
+        editorWindowController = controller
+        controller.showWindow(nil)
+        controller.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

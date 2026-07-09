@@ -258,6 +258,47 @@ enum SelfTest {
                 imported.flatMap { destination.pdfData(for: $0) } == pdfA &&
                 importedGroupPath == "Archive Group"
             )
+
+            var plainTextOptions = SpecialPasteOptions()
+            plainTextOptions.pasteAsPlainText = true
+            let plainTextResult = plainTextOptions.apply(to: sourceEntry) { source.blobData(named: $0) }
+            check("plain text paste strips pdf", plainTextResult.pdfBlobKey == nil)
+
+            if let bufferEntry = source.addClipboardPayload(
+                text: "buffer reference",
+                rtfData: nil,
+                htmlData: nil,
+                imageData: nil,
+                fileURLs: []
+            ) {
+                source.setCopyBuffer(slot: 1, entryId: bufferEntry.id)
+                source.removeEntry(id: bufferEntry.id)
+                check("deleting clip clears copy buffer", source.copyBuffer(for: 1) == nil)
+            } else {
+                check("deleting clip clears copy buffer", false)
+            }
+
+            let lifecycleStore = ClipboardStore(databaseURL: tempDir.appendingPathComponent("blob-lifecycle.db"))
+            if let lifecycleEntry = lifecycleStore.addClipboardPayload(
+                text: nil,
+                rtfData: nil,
+                htmlData: nil,
+                imageData: nil,
+                pdfData: pdfA,
+                fileURLs: []
+            ), let oldPDFKey = lifecycleEntry.pdfBlobKey,
+               let newPDFKey = lifecycleStore.saveBlob(pdfB, fileExtension: "pdf") {
+                var updatedEntry = lifecycleEntry
+                updatedEntry.pdfBlobKey = newPDFKey
+                lifecycleStore.update(updatedEntry)
+                check(
+                    "updating clip removes obsolete blob",
+                    lifecycleStore.blobData(named: oldPDFKey) == nil &&
+                    lifecycleStore.blobData(named: newPDFKey) == pdfB
+                )
+            } else {
+                check("updating clip removes obsolete blob", false)
+            }
         } catch {
             check("pdf archive round-trip", false)
         }

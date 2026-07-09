@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 Expected self-test result:
 
 ```text
-59 passed, 0 failed
+62 passed, 0 failed
 ```
 
-The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database and SQLite-consistent backup round trips, PDF capture/archive/sync preservation, group reparenting, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
+The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database and SQLite-consistent backup round trips, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
 
 ## Package a DMG
 

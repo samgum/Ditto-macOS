@@ -41,7 +41,10 @@ final class ClipboardMonitor {
     /// Force an immediate capture poll (used after `NSPasteboard.writeObjects`
     /// by our own copy path to keep the change count in sync).
     func syncChangeCount() {
-        lastChangeCount = pasteboard.changeCount
+        let changeCount = pasteboard.changeCount
+        queue.sync {
+            lastChangeCount = changeCount
+        }
     }
 
     private func poll() {
