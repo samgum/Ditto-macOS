@@ -22,6 +22,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("group") + "s"
         window.center()
         super.init(window: window)

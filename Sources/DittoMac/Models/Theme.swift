@@ -30,7 +30,8 @@ struct DittoTheme: Equatable {
             case .dark: return true
             case .light: return false
             case .system:
-                return NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                let appearance = NSApplication.shared.effectiveAppearance
+                return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             }
         }
     }
@@ -134,5 +135,11 @@ struct DittoTheme: Equatable {
     static func setMode(_ mode: Mode) {
         DittoSettings.themeName = mode.rawValue
         NotificationCenter.default.post(name: .dittoThemeChanged, object: nil)
+    }
+}
+
+extension NSWindow {
+    func applyDittoAppearance() {
+        appearance = DittoTheme.current.effectiveAppearance
     }
 }

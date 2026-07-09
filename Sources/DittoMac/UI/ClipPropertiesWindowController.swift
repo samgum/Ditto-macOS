@@ -35,6 +35,7 @@ final class ClipPropertiesWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("clip_properties")
         window.center()
         super.init(window: window)

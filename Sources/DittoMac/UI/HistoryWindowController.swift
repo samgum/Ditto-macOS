@@ -274,7 +274,14 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ClipTableCellView ?? ClipTableCellView()
         cell.identifier = identifier
         let theme = DittoTheme.current
-        cell.configure(entry: entry, store: store, drawThumbnails: DittoSettings.drawThumbnails, theme: theme)
+        let previewText = entry.text ?? fullText(for: entry) ?? entry.preview
+        cell.configure(
+            entry: entry,
+            store: store,
+            drawThumbnails: DittoSettings.drawThumbnails,
+            theme: theme,
+            previewText: previewText
+        )
         cell.setIndex(row, enabled: DittoSettings.showFirstTenText)
         return cell
     }
@@ -1210,7 +1217,10 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         let toolbar = makeToolbar()
 
-        let root = NSView()
+        let root = ThemeAwareHistoryRootView { [weak self] in
+            guard DittoTheme.current.mode == .system else { return }
+            self?.applyTheme()
+        }
         root.addSubview(searchField)
         root.addSubview(modePopup)
         root.addSubview(typeFilterPopup)
@@ -1271,14 +1281,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         applySearch()
     }
 
-    private func applySelectionColors() {
-        let theme = DittoTheme.current
-        if window?.isKeyWindow == true {
-            tableView.selectionHighlightStyle = .regular
-        } else {
-            tableView.selectionHighlightStyle = .sourceList
-        }
-        _ = theme.listBoxSelectedNoFocusBackground
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        ThemedHistoryRowView()
     }
 
     private func applyWindowChrome() {
@@ -1481,9 +1485,42 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         window?.backgroundColor = theme.mainWindowBackground
         scrollView.backgroundColor = theme.listBoxOddRowBackground
         tableView.backgroundColor = theme.listBoxOddRowBackground
+        previewScroll.layer?.backgroundColor = theme.listBoxEvenRowBackground.cgColor
+        previewPanel.textColor = theme.listBoxText
         countLabel.textColor = theme.captionText
-        emptyStateLabel.textColor = .secondaryLabelColor
+        emptyStateLabel.textColor = theme.captionText
         tableView.reloadData()
+    }
+}
+
+private final class ThemedHistoryRowView: NSTableRowView {
+    override func drawBackground(in dirtyRect: NSRect) {
+        DittoTheme.current.listBoxOddRowBackground.setFill()
+        dirtyRect.fill()
+    }
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard isSelected else { return }
+        let theme = DittoTheme.current
+        let color = isEmphasized ? theme.listBoxSelectedBackground : theme.listBoxSelectedNoFocusBackground
+        color.setFill()
+        dirtyRect.fill()
+    }
+}
+
+private final class ThemeAwareHistoryRootView: NSView {
+    private let onAppearanceChanged: () -> Void
+
+    init(onAppearanceChanged: @escaping () -> Void) {
+        self.onAppearanceChanged = onAppearanceChanged
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onAppearanceChanged()
     }
 }
 

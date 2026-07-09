@@ -25,6 +25,7 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("edit_clip")
         window.center()
         super.init(window: window)

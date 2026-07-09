@@ -20,6 +20,7 @@ final class FriendsWindowController: NSWindowController, NSTableViewDataSource, 
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("friends")
         window.center()
         super.init(window: window)

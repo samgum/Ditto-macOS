@@ -80,6 +80,7 @@ final class PreferencesWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("preferences")
         window.center()
         super.init(window: window)

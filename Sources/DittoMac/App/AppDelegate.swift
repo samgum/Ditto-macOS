@@ -215,7 +215,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     // MARK: - Theme
 
     private func applyThemeGlobally() {
-        NSApp.appearance = DittoTheme.current.effectiveAppearance
+        let theme = DittoTheme.current
+        NSApp.appearance = theme.effectiveAppearance
+        for window in NSApp.windows {
+            window.applyDittoAppearance()
+        }
         applyLayoutDirection()
     }
 

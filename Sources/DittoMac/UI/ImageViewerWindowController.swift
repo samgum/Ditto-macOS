@@ -13,6 +13,7 @@ final class ImageViewerWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = entry.preview
         window.center()
         super.init(window: window)

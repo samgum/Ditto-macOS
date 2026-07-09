@@ -13,6 +13,7 @@ final class StatisticsWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("statistics")
         window.center()
         super.init(window: window)

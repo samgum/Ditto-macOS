@@ -13,6 +13,7 @@ final class QRCodeWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("qr_code")
         window.center()
         super.init(window: window)

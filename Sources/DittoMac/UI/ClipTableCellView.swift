@@ -122,7 +122,13 @@ final class ClipTableCellView: NSTableCellView {
         indexLabel.stringValue = "\(index == 9 ? 10 : index + 1)"
     }
 
-    func configure(entry: ClipboardEntry, store: ClipboardStore, drawThumbnails: Bool, theme: DittoTheme) {
+    func configure(
+        entry: ClipboardEntry,
+        store: ClipboardStore,
+        drawThumbnails: Bool,
+        theme: DittoTheme,
+        previewText: String
+    ) {
         previewLabel.font = NSFont.systemFont(ofSize: CGFloat(DittoSettings.fontSize))
         previewLabel.textColor = theme.listBoxText
 
@@ -145,7 +151,7 @@ final class ClipTableCellView: NSTableCellView {
             colorSwatch.layer?.backgroundColor = color.cgColor
             previewLabel.stringValue = hex.uppercased()
         } else {
-            previewLabel.stringValue = entry.preview
+            previewLabel.stringValue = ClipboardEntry.truncated(previewText)
         }
 
         if showsThumbnail, let imageBlobKey = entry.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
