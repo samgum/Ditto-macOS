@@ -155,6 +155,12 @@ enum SelfTest {
             check("entry round-trip pinned", loaded.first?.neverAutoDelete == true)
             check("entry round-trip text", loaded.first?.text == "selftest")
 
+            let friendID = try db.upsertFriend(Friend(name: "Self Test", ipAddress: "127.0.0.1", sendAll: true))
+            check(
+                "friend send-all round-trip",
+                try db.loadFriends().first(where: { $0.id == friendID })?.sendAll == true
+            )
+
             let backupURL = tempDir.appendingPathComponent("Ditto-backup.db")
             try db.backup(to: backupURL)
             let backup = try MacClipboardDatabase(url: backupURL)
@@ -303,6 +309,42 @@ enum SelfTest {
             check("pdf archive round-trip", false)
         }
 
+        // MARK: History trimming
+        do {
+            DittoSettings.maxHistoryEntries = 2
+            let trimStore = ClipboardStore(databaseURL: tempDir.appendingPathComponent("trim.db"))
+            if let pinned = trimStore.addClipboardPayload(text: "pinned", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: []) {
+                trimStore.toggleNeverAutoDelete(id: pinned.id)
+            }
+            for value in ["first", "second", "third"] {
+                _ = trimStore.addClipboardPayload(text: value, rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
+            }
+            let entries = trimStore.snapshotEntries()
+            check(
+                "pinned clips do not consume history limit",
+                entries.filter(\.isPinned).count == 1 && entries.filter { $0.isPinned == false }.count == 2
+            )
+            DittoSettings.maxHistoryEntries = 0
+        }
+
+        // MARK: Localization resources
+        let requiredLocalizationKeys: Set<String> = [
+            "groups", "new_subgroup", "choose", "unlimited", "custom",
+            "plain_text", "rich_text_format", "html_format", "png_format", "pdf_format",
+            "files_count_format", "update_available_format", "update_message_format",
+            "download", "later", "startup_message_format", "accessibility_granted",
+            "grant_accessibility", "backup_success"
+        ]
+        let localizedResourcesAreComplete = LocalizationManager.shared.languages.allSatisfy { language in
+            guard let url = Bundle.module.url(forResource: language.code, withExtension: "json", subdirectory: "Localizations"),
+                  let data = try? Data(contentsOf: url),
+                  let strings = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return false
+            }
+            return requiredLocalizationKeys.isSubset(of: Set(strings.keys))
+        }
+        check("localization resources include new interface strings", localizedResourcesAreComplete)
+
         // MARK: Image capture + paste path (regression for the SIGSEGV that
         // happened when persisting/pasting image clips concurrently)
         do {
@@ -323,7 +365,11 @@ enum SelfTest {
                     store.copyToPasteboard(entry)
                     store.markPasted(entry)
                 }
-                check("image capture + paste path", store.entry(id: entry.id)?.pasteCount == 10)
+                check(
+                    "image capture + paste path",
+                    store.entry(id: entry.id)?.pasteCount == 10 &&
+                    NSPasteboard.general.data(forType: .png)?.isEmpty == false
+                )
             } else {
                 check("image capture + paste path", false)
             }

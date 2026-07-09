@@ -63,7 +63,7 @@ final class PreferencesWindowController: NSWindowController {
     private let translateUrlField = NSTextField()
     private let webSearchUrlField = NSTextField()
     private let databasePathField = NSTextField()
-    private let databaseChooseButton = NSButton(title: "Choose…", target: nil, action: nil)
+    private let databaseChooseButton = NSButton(title: "", target: nil, action: nil)
     private let regexFiltersField = NSTextField()
 
     private let loginAgent = LoginAgentManager()
@@ -461,9 +461,9 @@ final class PreferencesWindowController: NSWindowController {
 
         maxHistoryPopup.removeAllItems()
         for option in DittoSettings.maxHistoryOptions {
-            maxHistoryPopup.addItem(withTitle: option == 0 ? "∞ Unlimited" : "\(option)")
+            maxHistoryPopup.addItem(withTitle: option == 0 ? "∞ \(LocalizationManager.shared.text("unlimited"))" : "\(option)")
         }
-        maxHistoryPopup.addItem(withTitle: "Custom…")
+        maxHistoryPopup.addItem(withTitle: LocalizationManager.shared.text("custom"))
         if let index = DittoSettings.maxHistoryOptions.firstIndex(of: DittoSettings.maxHistoryEntries) {
             maxHistoryPopup.selectItem(at: index)
         } else {
@@ -682,7 +682,7 @@ final class PreferencesWindowController: NSWindowController {
         databasePathField.stringValue = DittoSettings.databasePath
         databasePathField.isEditable = false
         databasePathField.translatesAutoresizingMaskIntoConstraints = false
-        databaseChooseButton.title = "Choose…"
+        databaseChooseButton.title = LocalizationManager.shared.text("choose")
         databaseChooseButton.bezelStyle = .rounded
         databaseChooseButton.target = self
         databaseChooseButton.action = #selector(chooseDatabaseLocation)
@@ -733,7 +733,22 @@ final class PreferencesWindowController: NSWindowController {
         panel.nameFieldStringValue = "Ditto-Backup.db"
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
-            try? self?.store.backupDatabase(to: url)
+            guard let self else { return }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let message: String
+                do {
+                    try self.store.backupDatabase(to: url)
+                    message = LocalizationManager.shared.text("backup_success")
+                } catch {
+                    message = LocalizationManager.shared.text("operation_failed")
+                }
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = LocalizationManager.shared.text("app_name")
+                    alert.informativeText = message
+                    alert.runModal()
+                }
+            }
         }
     }
 

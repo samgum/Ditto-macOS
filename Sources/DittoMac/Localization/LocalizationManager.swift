@@ -59,7 +59,7 @@ final class LocalizationManager {
     }
 
     private func candidateBundles() -> [Bundle] {
-        var bundles: [Bundle] = []
+        var bundles: [Bundle] = [Bundle.module]
         if let module = Bundle(url: Bundle.main.bundleURL) { bundles.append(module) }
         bundles.append(Bundle.main)
         return bundles
@@ -255,7 +255,26 @@ final class LocalizationManager {
         "remove_pin": "Unpin",
         "database_location": "Database Location",
         "restart_needed": "Restart Ditto to apply the new database location.",
-        "check_for_updates": "Check for updates on launch"
+        "check_for_updates": "Check for updates on launch",
+        "groups": "Groups",
+        "new_subgroup": "New Subgroup",
+        "choose": "Choose…",
+        "unlimited": "Unlimited",
+        "custom": "Custom…",
+        "plain_text": "Plain Text",
+        "rich_text_format": "Rich Text Format",
+        "html_format": "HTML Format",
+        "png_format": "PNG",
+        "pdf_format": "PDF",
+        "files_count_format": "Files (%d)",
+        "update_available_format": "Ditto %@ is available",
+        "update_message_format": "You have %@. Download from GitHub Releases.",
+        "download": "Download",
+        "later": "Later",
+        "startup_message_format": "Ditto is running in the menu bar. %@: %@\n\nTo enable paste, grant Accessibility permission in System Settings ▸ Privacy & Security.",
+        "accessibility_granted": "Accessibility enabled",
+        "grant_accessibility": "Grant Accessibility…",
+        "backup_success": "Database backup created."
     ]
 }
 

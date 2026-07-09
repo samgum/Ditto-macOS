@@ -224,12 +224,14 @@ final class ClipPropertiesWindowController: NSWindowController {
         lines.append("\(LocalizationManager.shared.text("pastes")): \(entry.pasteCount)")
 
         var formats: [String] = []
-        if entry.text != nil { formats.append("Plain Text") }
-        if entry.rtfBlobKey != nil { formats.append("Rich Text Format") }
-        if entry.htmlBlobKey != nil { formats.append("HTML Format") }
-        if entry.imageBlobKey != nil { formats.append("PNG") }
-        if entry.pdfBlobKey != nil { formats.append("PDF") }
-        if let fileURLs = entry.fileURLs { formats.append("Files (\(fileURLs.count))") }
+        if entry.text != nil { formats.append(LocalizationManager.shared.text("plain_text")) }
+        if entry.rtfBlobKey != nil { formats.append(LocalizationManager.shared.text("rich_text_format")) }
+        if entry.htmlBlobKey != nil { formats.append(LocalizationManager.shared.text("html_format")) }
+        if entry.imageBlobKey != nil { formats.append(LocalizationManager.shared.text("png_format")) }
+        if entry.pdfBlobKey != nil { formats.append(LocalizationManager.shared.text("pdf_format")) }
+        if let fileURLs = entry.fileURLs {
+            formats.append(String(format: LocalizationManager.shared.text("files_count_format"), fileURLs.count))
+        }
         lines.append("\n\(LocalizationManager.shared.text("type")):")
         lines.append(contentsOf: formats)
 

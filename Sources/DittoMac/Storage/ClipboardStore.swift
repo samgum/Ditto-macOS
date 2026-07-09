@@ -231,11 +231,6 @@ final class ClipboardStore {
         if transformed.imageRepresentation == nil, let imageBlobKey = transformed.imageBlobKey, let data = blobData(named: imageBlobKey) {
             let imageItem = NSPasteboardItem()
             imageItem.setData(data, forType: .png)
-            // Also provide a TIFF representation — some apps (image editors,
-            // Preview) read TIFF and ignore PNG on the pasteboard.
-            if let image = NSImage(data: data), let tiff = image.tiffRepresentation {
-                imageItem.setData(tiff, forType: .tiff)
-            }
             pasteboardItems.append(imageItem)
         } else if let imageData = transformed.imageRepresentation {
             let imageItem = NSPasteboardItem()
@@ -473,7 +468,7 @@ final class ClipboardStore {
     }
 
     func upsertFriend(_ friend: Friend) {
-        try? database.upsertFriend(friend)
+        _ = try? database.upsertFriend(friend)
     }
 
     func deleteFriend(id: Int64) {
@@ -687,8 +682,7 @@ final class ClipboardStore {
         let limit = DittoSettings.maxHistoryEntries
         guard limit > 0 else { return } // 0 = unlimited
         // Pinned clips never count toward the limit.
-        let pinnedCount = entries.filter(\.isPinned).count
-        let nonPinnedBudget = max(1, limit - pinnedCount)
+        let nonPinnedBudget = limit
         let nonPinned = entries.filter { $0.isPinned == false }
         if nonPinned.count > nonPinnedBudget {
             let toRemove = Array(nonPinned.suffix(nonPinned.count - nonPinnedBudget))

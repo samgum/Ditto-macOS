@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         // another instance is already running.
         if !acquireSingletonLock() {
             Self.log("another instance holds the singleton lock — exiting")
-            isAlreadyRunning() // try to activate the existing instance
+            _ = isAlreadyRunning() // try to activate the existing instance
             NSApp.terminate(nil)
             return
         }
@@ -151,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         guard let url = URL(string: "https://api.github.com/repos/samgum/Ditto-macOS/releases/latest") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+        URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String else { return }
             let remote = tagName.replacingOccurrences(of: "v", with: "")
@@ -159,10 +159,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             if remote.compare(current, options: .numeric) == .orderedDescending {
                 DispatchQueue.main.async {
                     let alert = NSAlert()
-                    alert.messageText = "Ditto \(tagName) is available"
-                    alert.informativeText = "You have \(current). Download from GitHub Releases."
-                    alert.addButton(withTitle: "Download")
-                    alert.addButton(withTitle: "Later")
+                    alert.messageText = String(
+                        format: LocalizationManager.shared.text("update_available_format"),
+                        tagName
+                    )
+                    alert.informativeText = String(
+                        format: LocalizationManager.shared.text("update_message_format"),
+                        current
+                    )
+                    alert.addButton(withTitle: LocalizationManager.shared.text("download"))
+                    alert.addButton(withTitle: LocalizationManager.shared.text("later"))
                     if alert.runModal() == .alertFirstButtonReturn {
                         NSWorkspace.shared.open(URL(string: "https://github.com/samgum/Ditto-macOS/releases/latest")!)
                     }
@@ -250,6 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         historyWindowController?.refresh()
         rebuildStatusMenuIfNeeded()
         guard DittoSettings.showReceivedClipNotification,
+              notification.userInfo?["manualSend"] as? Bool == true,
               let sender = notification.userInfo?["sender"] as? String else { return }
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("clip_received") + " " + sender
@@ -566,8 +573,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         historyWindowController?.refreshText()
         preferencesWindowController?.refreshText()
         // Re-localize any open secondary windows (titles are set at init time).
-        groupsWindowController?.window?.title = LocalizationManager.shared.text("group") + "s"
-        friendsWindowController?.window?.title = LocalizationManager.shared.text("friends")
+        groupsWindowController?.refreshText()
+        friendsWindowController?.refreshText()
         statisticsWindowController?.window?.title = LocalizationManager.shared.text("statistics")
         statisticsWindowController?.refresh()
         propertiesWindowController?.window?.title = LocalizationManager.shared.text("clip_properties")
@@ -678,11 +685,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         // Accessibility status (needed for paste). Lets the user open the
         // prompt directly from the menu bar.
         let axTitle = PasteSimulator.hasAccessibilityPermission
-            ? "✓ Accessibility"
-            : "⚠ Grant Accessibility…"
+            ? "✓ \(LocalizationManager.shared.text("accessibility_granted"))"
+            : "⚠ \(LocalizationManager.shared.text("grant_accessibility"))"
         addItem(menu, title: axTitle, action: #selector(grantAccessibility), key: "")
 
-        let groupsItem = addItem(menu, title: LocalizationManager.shared.text("group") + "s", action: #selector(showGroups), key: "")
+        let groupsItem = addItem(menu, title: LocalizationManager.shared.text("groups"), action: #selector(showGroups), key: "")
         _ = groupsItem
         let friendsItem = addItem(menu, title: LocalizationManager.shared.text("friends"), action: #selector(showFriends), key: "")
         _ = friendsItem
@@ -917,7 +924,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         UserDefaults.standard.set(true, forKey: startupMessageShownKey)
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("app_name")
-        alert.informativeText = "Ditto is running in the menu bar. \(LocalizationManager.shared.text("hot_key")): \(HotKeyChoice.currentChoice.title)\n\nTo enable paste, grant Accessibility permission in System Settings ▸ Privacy & Security."
+        alert.informativeText = String(
+            format: LocalizationManager.shared.text("startup_message_format"),
+            LocalizationManager.shared.text("hot_key"),
+            HotKeyChoice.currentChoice.title
+        )
         alert.runModal()
     }
 }

@@ -1,14 +1,15 @@
 import AppKit
 import Foundation
 
-/// Manages clip groups: create, rename, delete. Mirrors the Windows `GroupTree`
-/// window (without nesting UI for now — nesting is supported in the model).
+/// Manages clip groups: create, nest, rename, and delete. Mirrors the Windows
+/// `GroupTree` window while exposing the model's parent-child hierarchy.
 final class GroupsWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     private let store: ClipboardStore
     private let onChanged: () -> Void
     private let tableView = NSTableView()
     private let nameField = NSTextField()
     private let addButton = NSButton(title: "", target: nil, action: nil)
+    private let addSubgroupButton = NSButton(title: "", target: nil, action: nil)
     private let renameButton = NSButton(title: "", target: nil, action: nil)
     private let deleteButton = NSButton(title: "", target: nil, action: nil)
 
@@ -23,7 +24,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
             defer: false
         )
         window.applyDittoAppearance()
-        window.title = LocalizationManager.shared.text("group") + "s"
+        window.title = LocalizationManager.shared.text("groups")
         window.center()
         super.init(window: window)
         configureContent()
@@ -56,6 +57,12 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
         addButton.action = #selector(addGroup)
         addButton.translatesAutoresizingMaskIntoConstraints = false
 
+        addSubgroupButton.title = LocalizationManager.shared.text("new_subgroup")
+        addSubgroupButton.bezelStyle = .rounded
+        addSubgroupButton.target = self
+        addSubgroupButton.action = #selector(addSubgroup)
+        addSubgroupButton.translatesAutoresizingMaskIntoConstraints = false
+
         renameButton.title = LocalizationManager.shared.text("edit_clip")
         renameButton.bezelStyle = .rounded
         renameButton.target = self
@@ -68,7 +75,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
         deleteButton.action = #selector(deleteGroup)
         deleteButton.translatesAutoresizingMaskIntoConstraints = false
 
-        let buttonRow = NSStackView(views: [addButton, renameButton, deleteButton])
+        let buttonRow = NSStackView(views: [addButton, addSubgroupButton, renameButton, deleteButton])
         buttonRow.orientation = .horizontal
         buttonRow.spacing = 8
         buttonRow.translatesAutoresizingMaskIntoConstraints = false
@@ -92,17 +99,34 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
             buttonRow.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             buttonRow.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12)
         ])
+        updateButtonState()
     }
 
-    func refresh() { tableView.reloadData() }
+    func refresh() {
+        tableView.reloadData()
+        updateButtonState()
+    }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { store.snapshotGroups().count }
+    func refreshText() {
+        window?.title = LocalizationManager.shared.text("groups")
+        tableView.tableColumns.first?.title = LocalizationManager.shared.text("group")
+        nameField.placeholderString = LocalizationManager.shared.text("group_name")
+        addButton.title = LocalizationManager.shared.text("new_group")
+        addSubgroupButton.title = LocalizationManager.shared.text("new_subgroup")
+        renameButton.title = LocalizationManager.shared.text("edit_clip")
+        deleteButton.title = LocalizationManager.shared.text("delete")
+        refresh()
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { store.hierarchicalGroups().count }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let group = store.snapshotGroups()[safe: row] else { return nil }
+        guard let item = store.hierarchicalGroups()[safe: row] else { return nil }
+        let group = item.group
         let cell = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("name"), owner: self) as? NSTableCellView ?? NSTableCellView()
+        cell.identifier = NSUserInterfaceItemIdentifier("name")
         let label = cell.textField ?? NSTextField(labelWithString: "")
-        label.stringValue = group.name
+        label.stringValue = String(repeating: "    ", count: item.depth) + group.name
         if cell.textField == nil {
             cell.textField = label
             cell.addSubview(label)
@@ -125,9 +149,20 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
         refresh()
     }
 
+    @objc private func addSubgroup() {
+        let row = tableView.selectedRow
+        guard let parent = store.hierarchicalGroups()[safe: row]?.group else { return }
+        let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.isEmpty == false else { return }
+        store.addGroup(name: name, parentId: parent.id)
+        nameField.stringValue = ""
+        onChanged()
+        refresh()
+    }
+
     @objc private func renameGroup() {
         let row = tableView.selectedRow
-        guard let group = store.snapshotGroups()[safe: row] else { return }
+        guard let group = store.hierarchicalGroups()[safe: row]?.group else { return }
         let alert = NSAlert()
         alert.messageText = LocalizationManager.shared.text("group_name")
         alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
@@ -144,9 +179,20 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
 
     @objc private func deleteGroup() {
         let row = tableView.selectedRow
-        guard let group = store.snapshotGroups()[safe: row] else { return }
+        guard let group = store.hierarchicalGroups()[safe: row]?.group else { return }
         store.deleteGroup(id: group.id)
         onChanged()
         refresh()
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        updateButtonState()
+    }
+
+    private func updateButtonState() {
+        let hasSelection = tableView.selectedRow >= 0
+        addSubgroupButton.isEnabled = hasSelection
+        renameButton.isEnabled = hasSelection
+        deleteButton.isEnabled = hasSelection
     }
 }

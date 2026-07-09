@@ -148,7 +148,7 @@ final class MacClipboardDatabase {
             addColumnIfMissing(table: "ClipboardEntries", column: column, type: type)
         }
         // Backfill clipOrder for legacy rows that have none / zero.
-        try? execute("UPDATE ClipboardEntries SET clipOrder = createdAt WHERE clipOrder IS NULL OR clipOrder = 0")
+        _ = try? execute("UPDATE ClipboardEntries SET clipOrder = createdAt WHERE clipOrder IS NULL OR clipOrder = 0")
 
         setUserVersion(Self.currentSchemaVersion)
         schemaVersion = Self.currentSchemaVersion
@@ -162,13 +162,13 @@ final class MacClipboardDatabase {
     }
 
     private func setUserVersion(_ version: Int) {
-        try? execute("PRAGMA user_version = \(version)")
+        _ = try? execute("PRAGMA user_version = \(version)")
     }
 
     private func addColumnIfMissing(table: String, column: String, type: String) {
         let columns = existingColumns(in: table)
         if columns.contains(column) == false {
-            try? execute("ALTER TABLE \(table) ADD COLUMN \(column) \(type)")
+            _ = try? execute("ALTER TABLE \(table) ADD COLUMN \(column) \(type)")
         }
     }
 
@@ -483,7 +483,7 @@ final class MacClipboardDatabase {
 
     func removeBlobs(keys: [String]) {
         for key in keys {
-            try? execute(
+            _ = try? execute(
                 "DELETE FROM ClipBlobs WHERE blobKey = ?",
                 binds: { sqlite3_bind_text($0, 1, key, -1, databaseTransientDestructor) }
             )
@@ -618,7 +618,7 @@ final class MacClipboardDatabase {
             try body()
             try execute("COMMIT")
         } catch {
-            try? execute("ROLLBACK")
+            _ = try? execute("ROLLBACK")
             throw error
         }
     }

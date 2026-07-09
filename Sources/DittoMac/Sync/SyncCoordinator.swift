@@ -17,6 +17,8 @@ final class SyncCoordinator {
     private static let maximumPayloadBytes = 86 * 1024 * 1024
     private static let maximumClipDataBytes = 64 * 1024 * 1024
     private static let maximumFileURLs = 100
+    private static let maximumInboundConnections = 32
+    private static let receiveTimeout: DispatchTimeInterval = .seconds(10)
 
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.sync")
@@ -72,6 +74,11 @@ final class SyncCoordinator {
     }
 
     private func handle(connection: NWConnection) {
+        guard incomingConnections.count < Self.maximumInboundConnections else {
+            NSLog("Sync: rejecting connection because the inbound connection limit was reached")
+            connection.cancel()
+            return
+        }
         incomingConnections.append(connection)
         // Remove (and cancel) the connection when it ends, so we don't leak
         // sockets over the lifetime of the server.
@@ -88,7 +95,13 @@ final class SyncCoordinator {
     }
 
     private func receiveMessage(on connection: NWConnection) {
+        let timeout = DispatchWorkItem {
+            NSLog("Sync: closing connection that did not complete a message in time")
+            connection.cancel()
+        }
+        queue.asyncAfter(deadline: .now() + Self.receiveTimeout, execute: timeout)
         receiveLengthPrefixed(connection: connection) { [weak self] headerData, payloadData in
+            timeout.cancel()
             guard let self,
                   let headerData,
                   let payloadData,
@@ -119,25 +132,36 @@ final class SyncCoordinator {
         let maxBytes = configuredLimit > 0
             ? min(configuredLimit, Self.maximumClipDataBytes)
             : Self.maximumClipDataBytes
-        func decode(_ b64: String?) -> Data? {
-            guard let b64, let data = Data(base64Encoded: b64) else { return nil }
+        func decode(_ b64: String) -> Data? {
+            guard let data = Data(base64Encoded: b64) else { return nil }
             return data.count <= maxBytes ? data : nil
         }
         guard (payload.text?.utf8.count ?? 0) <= maxBytes else {
             NSLog("Sync: incoming text payload exceeds the size limit")
             return
         }
-        let rtfData = decode(payload.rtfData)
-        let htmlData = decode(payload.htmlData)
-        let imageData = decode(payload.imageData)
-        let pdfData = decode(payload.pdfData)
-        let fileURLs = (payload.fileURLs ?? []).prefix(Self.maximumFileURLs).compactMap { path -> URL? in
-            guard path.utf8.count <= 4_096, path.isEmpty == false else { return nil }
-            return URL(fileURLWithPath: path)
+        let encodedBlobs = [payload.rtfData, payload.htmlData, payload.imageData, payload.pdfData]
+        guard encodedBlobs.allSatisfy({ encoded in
+            guard let encoded else { return true }
+            return decode(encoded) != nil
+        }) else {
+            NSLog("Sync: incoming clip contains invalid or oversized binary data")
+            return
         }
+        let rawFileURLs = payload.fileURLs ?? []
+        guard rawFileURLs.count <= Self.maximumFileURLs,
+              rawFileURLs.allSatisfy({ $0.isEmpty == false && $0.utf8.count <= 4_096 }) else {
+            NSLog("Sync: incoming clip contains invalid file URLs")
+            return
+        }
+        let rtfData = payload.rtfData.flatMap(decode)
+        let htmlData = payload.htmlData.flatMap(decode)
+        let imageData = payload.imageData.flatMap(decode)
+        let pdfData = payload.pdfData.flatMap(decode)
+        let fileURLs = rawFileURLs.map(URL.init(fileURLWithPath:))
 
         // addClipboardPayload saves the blobs itself — don't double-save here.
-        self.store?.addClipboardPayload(
+        guard self.store?.addClipboardPayload(
             text: payload.text,
             rtfData: rtfData,
             htmlData: htmlData,
@@ -145,13 +169,16 @@ final class SyncCoordinator {
             pdfData: pdfData,
             fileURLs: fileURLs,
             sourceApp: header.sender
-        )
+        ) != nil else {
+            NSLog("Sync: incoming clip was rejected by the local history store")
+            return
+        }
 
         DispatchQueue.main.async {
             NotificationCenter.default.post(
                 name: .dittoClipReceived,
                 object: nil,
-                userInfo: ["sender": header.computerName]
+                userInfo: ["sender": header.computerName, "manualSend": header.manualSend]
             )
         }
     }
