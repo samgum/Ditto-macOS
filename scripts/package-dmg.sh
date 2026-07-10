@@ -16,8 +16,13 @@ echo "==> Building release binary"
 swift build --package-path "$ROOT_DIR" -c release
 
 BINARY="$ROOT_DIR/.build/release/DittoMac"
+RESOURCE_BUNDLE="$ROOT_DIR/.build/release/DittoMac_DittoMac.bundle"
 if [[ ! -f "$BINARY" ]]; then
   echo "Build did not produce $BINARY" >&2
+  exit 1
+fi
+if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
+  echo "Build did not produce $RESOURCE_BUNDLE" >&2
   exit 1
 fi
 
@@ -29,6 +34,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 # CFBundleExecutable is "Ditto" (see Info.plist) — the binary must match.
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$EXEC_NAME"
 cp "$RESOURCES_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
 
 # Bundle localizations
 if [[ -d "$ROOT_DIR/Sources/DittoMac/Localizations" ]]; then
@@ -63,6 +69,9 @@ echo "==> Ad-hoc code signing"
 codesign --force --deep --sign - "$APP_BUNDLE"
 echo "    signature:"
 codesign -dv "$APP_BUNDLE" 2>&1 | sed 's/^/    /' || true
+
+echo "==> Verifying packaged app resources"
+"$APP_BUNDLE/Contents/MacOS/$EXEC_NAME" --selftest
 
 echo "==> Staging DMG contents (Ditto.app + /Applications link)"
 ln -s /Applications "$STAGE_DIR/Applications"

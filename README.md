@@ -6,7 +6,7 @@ Ditto for macOS is a native Swift/AppKit clipboard manager for macOS 13 and late
 
 **Author: 伤感咩吖**
 
-**Current version: 1.2.1**
+**Current version: 1.2.2**
 
 **License: GPL-3.0**
 
@@ -146,7 +146,7 @@ bash scripts/package-dmg.sh
 Generated outputs:
 
 ```text
-dist/Ditto-macOS-1.2.1.dmg
+dist/Ditto-macOS-1.2.2.dmg
 dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```
