@@ -328,6 +328,12 @@ final class MacClipboardDatabase {
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = URL(fileURLWithPath: url.path + suffix)
+            if FileManager.default.fileExists(atPath: sidecar.path) {
+                try FileManager.default.removeItem(at: sidecar)
+            }
+        }
 
         var destination: OpaquePointer?
         guard sqlite3_open_v2(url.path, &destination, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {

@@ -5,6 +5,7 @@ import Foundation
 /// the behavioural rules from Windows Ditto: dedup, expiry, trimming, pinned
 /// clips, paste-counting, groups, and copy buffers.
 final class ClipboardStore {
+    private static let recoveredQuarantinesKey = "Ditto.RecoveredQuarantinedDatabases"
     private let legacyFileURL: URL
     private let legacyDataDirectory: URL
     private let database: MacClipboardDatabase
@@ -39,21 +40,23 @@ final class ClipboardStore {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         legacyFileURL = directory.appendingPathComponent("history.json")
         legacyDataDirectory = directory.appendingPathComponent("Data", isDirectory: true)
-        let url = databaseURL ?? DittoSettings.databaseURL ?? directory.appendingPathComponent("Ditto.db")
-        databaseFileURL = url
-        // Recover from a corrupt database instead of crashing on launch: if
-        // the DB can't be opened, quarantine it and start fresh.
-        if let opened = try? MacClipboardDatabase(url: url) {
-            database = opened
-        } else {
-            let corrupt = url.deletingPathExtension().appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).db")
-            try? FileManager.default.moveItem(at: url, to: corrupt)
-            NSLog("[Ditto] database was unreadable; moved to \(corrupt.lastPathComponent) and starting fresh.")
-            // try! here is safe: the file no longer exists (moved), so a fresh
-            // create can only fail on a truly unwritable disk.
-            database = try! MacClipboardDatabase(url: url)
+        let defaultURL = directory.appendingPathComponent("Ditto.db")
+        let requestedURL = databaseURL ?? DittoSettings.databaseURL ?? defaultURL
+        do {
+            database = try MacClipboardDatabase(url: requestedURL)
+            databaseFileURL = requestedURL
+        } catch {
+            // A failed open can be transient (permissions, a stale lock, or an
+            // interrupted migration). Never rename the user's only database.
+            let fallbackURL = directory.appendingPathComponent("Ditto-recovery-\(Int(Date().timeIntervalSince1970)).db")
+            NSLog("[Ditto] failed to open \(requestedURL.path): \(error). The original file was left untouched; using \(fallbackURL.lastPathComponent).")
+            database = try! MacClipboardDatabase(url: fallbackURL)
+            databaseFileURL = fallbackURL
         }
         load()
+        if requestedURL.standardizedFileURL == defaultURL.standardizedFileURL {
+            recoverQuarantinedDatabases(in: directory)
+        }
         migrateLegacyJSONIfNeeded()
         enforceExpiry()
     }
@@ -564,7 +567,31 @@ final class ClipboardStore {
     // MARK: - Database maintenance
 
     func backupDatabase(to url: URL) throws {
+        flush()
         try database.backup(to: url)
+    }
+
+    /// Creates a complete SQLite-consistent copy of the current history in a
+    /// user-selected folder. The app switches to it after restart, while the
+    /// previous database remains intact until the user confirms everything is
+    /// present in the new location.
+    func prepareDatabaseRelocation(to directory: URL) throws -> URL {
+        let destination = directory.appendingPathComponent("Ditto.db")
+        guard destination.standardizedFileURL != databaseFileURL.standardizedFileURL else {
+            return destination
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard FileManager.default.fileExists(atPath: destination.path) == false else {
+            throw MacClipboardDatabaseError.executeFailed("A Ditto.db file already exists in the selected folder")
+        }
+        try backupDatabase(to: destination)
+        return destination
+    }
+
+    /// Waits for all queued history writes. Call this before app termination
+    /// and before creating a database relocation copy.
+    func flush() {
+        queue.sync {}
     }
 
     func compactDatabase() {
@@ -708,11 +735,54 @@ final class ClipboardStore {
         let snapshotGroups = groups
         lock.unlock()
         queue.async { [database] in
-            try? database.replaceEntries(snapshot)
+            do {
+                try database.replaceEntries(snapshot)
+            } catch {
+                NSLog("[Ditto] failed to persist clipboard entries: \(error)")
+                return
+            }
             for group in snapshotGroups {
-                try? database.updateGroup(group)
+                do {
+                    try database.updateGroup(group)
+                } catch {
+                    NSLog("[Ditto] failed to persist group \(group.id): \(error)")
+                }
             }
         }
+    }
+
+    private func recoverQuarantinedDatabases(in directory: URL) {
+        let manager = FileManager.default
+        let previouslyRecovered = Set(UserDefaults.standard.stringArray(forKey: Self.recoveredQuarantinesKey) ?? [])
+        guard let urls = try? manager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        var recovered = previouslyRecovered
+        var recoveredEntries = 0
+        for url in urls where url.lastPathComponent.hasPrefix("Ditto.corrupt-") && url.pathExtension == "db" {
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let marker = "\(url.path)|\(values?.fileSize ?? 0)|\(values?.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+            guard recovered.contains(marker) == false else { continue }
+
+            let countBefore = snapshotEntries().count
+            do {
+                try importArchive(from: url)
+                recoveredEntries += max(0, snapshotEntries().count - countBefore)
+                recovered.insert(marker)
+            } catch {
+                // Keep the file in place for manual recovery if it genuinely
+                // cannot be read. A failed recovery never deletes data.
+                NSLog("[Ditto] unable to recover \(url.lastPathComponent): \(error)")
+            }
+        }
+        if recoveredEntries > 0 {
+            flush()
+            NSLog("[Ditto] recovered \(recoveredEntries) clipboard entries from previously quarantined databases.")
+        }
+        UserDefaults.standard.set(Array(recovered), forKey: Self.recoveredQuarantinesKey)
     }
 
     // MARK: - Legacy migration

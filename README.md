@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 Expected self-test result:
 
 ```text
-62 passed, 0 failed
+68 passed, 0 failed
 ```
 
-The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database and SQLite-consistent backup round trips, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
+The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database persistence and SQLite-consistent backup/relocation round trips, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
 
 ## Package a DMG
 
@@ -387,6 +387,12 @@ Default database:
 ```text
 ~/Library/Application Support/Ditto/Ditto.db
 ```
+
+The database is created automatically on first launch. In Preferences, choose a
+folder under **Database Location** to create a complete copy named `Ditto.db` in
+that folder; restart Ditto to switch to it. Ditto never overwrites an existing
+`Ditto.db` in the chosen folder, and the original database is retained until you
+verify the new location.
 
 Legacy JSON migration source:
 

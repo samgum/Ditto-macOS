@@ -111,6 +111,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        monitor?.stop()
+        activeAppTracker.stop()
+        syncCoordinator.stop()
+        store.flush()
+        if let backgroundActivity {
+            ProcessInfo.processInfo.endActivity(backgroundActivity)
+            self.backgroundActivity = nil
+        }
+    }
+
     // MARK: - Single-instance lock
 
     /// File handle held for the lifetime of the app to prevent duplicate

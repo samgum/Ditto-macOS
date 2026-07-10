@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 期望自测结果：
 
 ```text
-62 passed, 0 failed
+68 passed, 0 failed
 ```
 
-自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库与 SQLite 一致性备份往返、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
+自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库持久化与 SQLite 一致性备份/迁移往返、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
 
 ## 打包 DMG
 
@@ -387,6 +387,8 @@ Windows 点对点网络协议集成与数据库导入是不同功能，目前仍
 ```text
 ~/Library/Application Support/Ditto/Ditto.db
 ```
+
+首次启动时会自动创建数据库。可在偏好设置的“数据库位置”中选择一个文件夹，Ditto 会先将当前历史完整复制为该文件夹中的 `Ditto.db`，重启后再切换到新位置。若目标文件夹已存在 `Ditto.db`，Ditto 不会覆盖它；旧数据库也会保留，直到你确认新位置的数据完整无误。
 
 旧 JSON 迁移来源：
 

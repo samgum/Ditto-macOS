@@ -679,7 +679,7 @@ final class PreferencesWindowController: NSWindowController {
     // Database path field + Choose button in one row
     private func databasePathRow() -> NSView {
         databasePathField.placeholderString = "~/Library/Application Support/Ditto/Ditto.db"
-        databasePathField.stringValue = DittoSettings.databasePath
+        databasePathField.stringValue = displayedDatabasePath
         databasePathField.isEditable = false
         databasePathField.translatesAutoresizingMaskIntoConstraints = false
         databaseChooseButton.title = LocalizationManager.shared.text("choose")
@@ -708,7 +708,7 @@ final class PreferencesWindowController: NSWindowController {
 
     private func databaseRow() -> NSView {
         databasePathField.placeholderString = "~/Library/Application Support/Ditto/Ditto.db"
-        databasePathField.stringValue = DittoSettings.databasePath
+        databasePathField.stringValue = displayedDatabasePath
         databasePathField.isEditable = false
         databasePathField.translatesAutoresizingMaskIntoConstraints = false
         databaseChooseButton.bezelStyle = .rounded
@@ -758,18 +758,37 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func chooseDatabaseLocation() {
         let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = store.databaseFileURL.deletingLastPathComponent()
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            DittoSettings.databasePath = url.path
-            self?.databasePathField.stringValue = url.path
-            let alert = NSAlert()
-            alert.messageText = LocalizationManager.shared.text("restart_needed")
-            alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
-            alert.runModal()
+            guard response == .OK, let directory = panel.url, let self else { return }
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let url = try self.store.prepareDatabaseRelocation(to: directory)
+                    DispatchQueue.main.async {
+                        DittoSettings.databasePath = url.path
+                        self.databasePathField.stringValue = url.path
+                        let alert = NSAlert()
+                        alert.messageText = LocalizationManager.shared.text("restart_needed")
+                        alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
+                        alert.runModal()
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        let alert = NSAlert()
+                        alert.messageText = LocalizationManager.shared.text("operation_failed")
+                        alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
+                        alert.runModal()
+                    }
+                }
+            }
         }
+    }
+
+    private var displayedDatabasePath: String {
+        DittoSettings.databaseURL?.path ?? store.databaseFileURL.path
     }
 }
 

@@ -177,6 +177,33 @@ enum SelfTest {
             check("database round-trip", false)
         }
 
+        // MARK: Clipboard store persistence and relocation
+        do {
+            let sourceURL = tempDir.appendingPathComponent("persistent-history.db")
+            let source = ClipboardStore(databaseURL: sourceURL)
+            guard let entry = source.addClipboardPayload(
+                text: "persist across restart",
+                rtfData: nil,
+                htmlData: nil,
+                imageData: nil,
+                fileURLs: []
+            ) else {
+                check("clipboard store persists before restart", false)
+                check("database relocation preserves history", false)
+                throw MacClipboardDatabaseError.executeFailed("Persistent test clip was not captured")
+            }
+            source.flush()
+            let reopened = ClipboardStore(databaseURL: sourceURL)
+            check("clipboard store persists before restart", reopened.entry(id: entry.id)?.text == "persist across restart")
+
+            let destinationDirectory = tempDir.appendingPathComponent("relocated-history", isDirectory: true)
+            let destinationURL = try source.prepareDatabaseRelocation(to: destinationDirectory)
+            let relocated = ClipboardStore(databaseURL: destinationURL)
+            check("database relocation preserves history", relocated.entry(id: entry.id)?.text == "persist across restart")
+        } catch {
+            check("clipboard store persistence", false)
+        }
+
         // MARK: Windows-compatible encryption round-trip (KeePass AES-KDF + CBC)
         let winPassword = "LetMeIn"
         let winSecret = Data("clip payload for windows peer".utf8)
