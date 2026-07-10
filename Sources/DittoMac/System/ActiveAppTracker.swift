@@ -8,25 +8,34 @@ final class ActiveAppTracker {
     static let shared = ActiveAppTracker()
 
     private var lastNonDittoApp: NSRunningApplication?
-    private var pollTimer: Timer?
+    private var activationObserver: NSObjectProtocol?
 
     private init() {}
 
     var previousApplication: NSRunningApplication? { lastNonDittoApp }
 
     func start() {
-        recordIfNeeded()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            self?.recordIfNeeded()
+        guard activationObserver == nil else { return }
+        captureCurrentApplication()
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.captureCurrentApplication()
         }
     }
 
     func stop() {
-        pollTimer?.invalidate()
-        pollTimer = nil
+        if let activationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
+        }
+        activationObserver = nil
     }
 
-    private func recordIfNeeded() {
+    /// Records the currently active app immediately before Ditto takes focus.
+    /// This prevents a global hot key from pasting into a recently-active app.
+    func captureCurrentApplication() {
         guard let front = NSWorkspace.shared.frontmostApplication else { return }
         if front.bundleIdentifier != Bundle.main.bundleIdentifier {
             lastNonDittoApp = front

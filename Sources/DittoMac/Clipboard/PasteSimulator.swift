@@ -12,7 +12,9 @@ import Foundation
 enum PasteSimulator {
     static func paste(afterDelay seconds: TimeInterval = 0.12) {
         let front = NSWorkspace.shared.frontmostApplication
-        front?.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        if front?.isActive == false {
+            front?.activate(options: [.activateIgnoringOtherApps])
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
             postCommandV()
         }
@@ -24,7 +26,7 @@ enum PasteSimulator {
     static func paste(into app: NSRunningApplication?, afterDelay seconds: TimeInterval = 0.18) {
         // Don't paste into nothing — if no previous app is known, sending ⌘V
         // would land in Ditto's own (hidden) window or nowhere useful.
-        guard let app else {
+        guard let app, app.isTerminated == false else {
             NSLog("[Ditto] paste skipped — no target application known")
             return
         }
@@ -34,7 +36,11 @@ enum PasteSimulator {
         let customKey = bundleId.flatMap { DittoSettings.perAppPasteKeys[$0] }.flatMap { HotKey.decode($0) }
 
         DispatchQueue.main.async {
-            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            // Avoid reactivating an app that is already focused: redundant
+            // activation can reorder its windows and feels like focus loss.
+            if app.isActive == false {
+                app.activate(options: [.activateIgnoringOtherApps])
+            }
         }
         DispatchQueue.global(qos: .userInitiated).async {
             // Give the target a moment to actually take focus before posting.

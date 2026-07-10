@@ -12,7 +12,7 @@ final class ClipboardMonitor {
     private let store: ClipboardStore
     private var lastChangeCount: Int
     private var timer: DispatchSourceTimer?
-    private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.clipboard", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.clipboard", qos: .utility)
     var onChange: ((ClipboardEntry) -> Void)?
 
     init(store: ClipboardStore) {
@@ -24,8 +24,13 @@ final class ClipboardMonitor {
         // Idempotent: never stack a second timer if already running (a future
         // restart path would otherwise leak the old timer and poll at 2× rate).
         guard timer == nil else { return }
+        let interval = DittoSettings.pollIntervalSeconds
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + DittoSettings.pollIntervalSeconds, repeating: DittoSettings.pollIntervalSeconds)
+        timer.schedule(
+            deadline: .now() + interval,
+            repeating: interval,
+            leeway: .milliseconds(150)
+        )
         timer.setEventHandler { [weak self] in
             self?.poll()
         }

@@ -25,10 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     private let syncCoordinator = SyncCoordinator()
 
-    /// Held for the lifetime of the app to prevent App Nap — without this,
-    /// macOS suspends the menu-bar process and it stops watching the
-    /// clipboard / can't be summoned by the global hot key.
-    private var keepAliveActivity: NSObjectProtocol?
+    /// Marks clipboard monitoring as background work without preventing App
+    /// Nap or keeping the CPU in a user-initiated power state.
+    private var backgroundActivity: NSObjectProtocol?
 
     private var mainHotKeyId: UInt32?
     private var perClipHotKeyIds: [UInt32: UUID] = [:]
@@ -64,10 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         Self.log("activationPolicy set")
         ProcessInfo.processInfo.disableAutomaticTermination("Ditto monitors the clipboard from the menu bar.")
         ProcessInfo.processInfo.disableSuddenTermination()
-        // Prevent App Nap so the process keeps running and the global hot key
-        // stays responsive even when no window is open.
-        keepAliveActivity = ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiatedAllowingIdleSystemSleep],
+        backgroundActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.background],
             reason: "Ditto monitors the clipboard from the menu bar."
         )
 
@@ -177,16 +174,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }.resume()
     }
 
-    // MARK: - Power management (reopen DB after wake)
+    // MARK: - Power management
 
     private func registerPowerHandling() {
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(handleWake),
             name: NSWorkspace.didWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(handleWillSleep),
+            name: NSWorkspace.willSleepNotification, object: nil)
+    }
+
+    @objc private func handleWillSleep() {
+        monitor?.stop()
     }
 
     @objc private func handleWake() {
-        // Re-enforce expiry and refresh after the Mac wakes from sleep.
+        // Ignore the pasteboard state from before sleep, then resume polling.
+        monitor?.syncChangeCount()
+        monitor?.start()
         store.enforceExpiry()
         historyWindowController?.refresh()
     }
@@ -320,6 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     private func pasteSpecificClip(id: UUID) {
         guard let entry = store.entry(id: id) else { return }
+        activeAppTracker.captureCurrentApplication()
         // Snapshot the user's prior clipboard so we can restore it after the
         // paste (honors restoreClipboardAfterPaste, same as the other paths).
         let snapshot = DittoSettings.restoreClipboardAfterPaste ? ClipboardSaveRestore.snapshot() : nil
@@ -379,6 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     // MARK: - Windows
 
     @objc func showHistory() {
+        activeAppTracker.captureCurrentApplication()
         if historyWindowController == nil {
             let controller = HistoryWindowController(
                 store: store,
@@ -593,6 +601,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         if DittoSettings.hideDittoOnPaste && DittoSettings.alwaysOnTop == false {
             historyWindowController?.window?.orderOut(nil)
         }
+        activeAppTracker.captureCurrentApplication()
         let target = activeAppTracker.previousApplication
         // Always attempt the paste. Accessibility trust is surfaced via the
         // status-bar menu (✓ / ⚠ + "Grant Accessibility…") rather than a

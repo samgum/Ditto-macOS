@@ -136,7 +136,9 @@ enum DittoSettings {
     }
 
     static var pollIntervalSeconds: Double {
-        get { max(0.1, defaults.object(forKey: Key.pollInterval) as? Double ?? 0.5) }
+        // Clipboard polling is necessary on macOS, but sub-400 ms wakeups keep
+        // a menu-bar app needlessly busy without a user-visible benefit.
+        get { max(0.4, defaults.object(forKey: Key.pollInterval) as? Double ?? 0.75) }
         set { defaults.set(newValue, forKey: Key.pollInterval) }
     }
 

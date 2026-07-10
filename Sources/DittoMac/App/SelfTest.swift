@@ -130,6 +130,11 @@ enum SelfTest {
         DittoSettings.sendRecvPort = 70_000
         check("sync port is clamped", lowPortIsClamped && DittoSettings.sendRecvPort == 65_535)
 
+        let originalPollInterval = DittoSettings.pollIntervalSeconds
+        defer { DittoSettings.pollIntervalSeconds = originalPollInterval }
+        DittoSettings.pollIntervalSeconds = 0.1
+        check("clipboard polling has an energy-safe lower bound", DittoSettings.pollIntervalSeconds == 0.4)
+
         // MARK: QR code
         if let image = QRCodeGenerator.image(from: "https://github.com/samgum/Ditto-macOS", borderPixels: 0, moduleSize: 8) {
             check("qr image non-empty", image.size.width > 0 && image.size.height > 0)
