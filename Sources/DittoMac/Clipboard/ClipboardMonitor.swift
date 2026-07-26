@@ -60,12 +60,6 @@ final class ClipboardMonitor {
         let bundleId = frontApp?.bundleIdentifier
         let appName = frontApp?.localizedName
 
-        // Respect the Windows "Clipboard Viewer Ignore" / exclusion convention:
-        // if the pasting app is Ditto itself, do not re-capture our own paste.
-        if bundleId == Bundle.main.bundleIdentifier {
-            return
-        }
-
         // Honour the Windows/macOS exclusion markers: apps that place these
         // hint types on the pasteboard signal "do not record this."
         for excludeType in ClipboardMonitor.excludeFormatTypes {
@@ -96,7 +90,10 @@ final class ClipboardMonitor {
             imageData: imageData,
             pdfData: pdfData,
             fileURLs: fileURLs,
-            sourceApp: appName
+            // A user can copy and immediately summon Ditto before this polling
+            // pass runs. Keep that clip instead of dropping it just because
+            // Ditto is now frontmost; Ditto's own writes sync changeCount.
+            sourceApp: bundleId == Bundle.main.bundleIdentifier ? nil : appName
         ) else {
             return
         }

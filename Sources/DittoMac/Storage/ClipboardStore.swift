@@ -762,14 +762,16 @@ final class ClipboardStore {
         let snapshotByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
         lock.unlock()
 
-        queue.sync {
+        let historyChanged = queue.sync { () -> Bool in
             let changedEntries = snapshotByID.values.filter {
                 self.persistedEntriesByID[$0.id] != $0
             }
             let deletedIDs = self.persistedEntriesByID.keys.filter {
                 snapshotByID[$0] == nil
             }
-            guard changedEntries.isEmpty == false || deletedIDs.isEmpty == false else { return }
+            guard changedEntries.isEmpty == false || deletedIDs.isEmpty == false else {
+                return false
+            }
             do {
                 try self.database.applyEntryChanges(
                     upserting: changedEntries,
@@ -778,6 +780,14 @@ final class ClipboardStore {
                 self.persistedEntriesByID = snapshotByID
             } catch {
                 NSLog("[Ditto] failed to persist clipboard entries: \(error)")
+            }
+            return true
+        }
+
+        if historyChanged {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                NotificationCenter.default.post(name: .dittoHistoryChanged, object: self)
             }
         }
     }

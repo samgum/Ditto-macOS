@@ -83,9 +83,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let monitor = ClipboardMonitor(store: store)
         monitor.onChange = { [weak self] entry in
             Statistics.shared.recordCopy()
-            if self?.historyWindowController?.window?.isVisible == true {
-                self?.historyWindowController?.refresh()
-            }
             self?.syncCoordinator.broadcast(entry: entry)
             if DittoSettings.showSaveNotification { SaveNotifier.shared.show(entry.preview) }
             if DittoSettings.showSaveAnimation { SaveAnimation.shared.animate() }
@@ -253,9 +250,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     private func handleReceivedClip(_ notification: Notification) {
-        if historyWindowController?.window?.isVisible == true {
-            historyWindowController?.refresh()
-        }
         guard DittoSettings.showReceivedClipNotification,
               notification.userInfo?["manualSend"] as? Bool == true,
               let sender = notification.userInfo?["sender"] as? String else { return }

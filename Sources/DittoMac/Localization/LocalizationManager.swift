@@ -308,5 +308,6 @@ extension Notification.Name {
     static let dittoLanguageChanged = Notification.Name("DittoLanguageChanged")
     static let dittoThemeChanged = Notification.Name("DittoThemeChanged")
     static let dittoSettingsChanged = Notification.Name("DittoSettingsChanged")
+    static let dittoHistoryChanged = Notification.Name("DittoHistoryChanged")
     static let dittoClipReceived = Notification.Name("DittoClipReceived")
 }

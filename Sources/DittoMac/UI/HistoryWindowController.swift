@@ -62,6 +62,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private var fullTextCache: [UUID: String] = [:]
     private var keyEventMonitor: Any?
     private var themeObserver: NSObjectProtocol?
+    private var historyObserver: NSObjectProtocol?
+    private var pendingHistoryRefresh: DispatchWorkItem?
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -98,6 +100,13 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         themeObserver = NotificationCenter.default.addObserver(forName: .dittoThemeChanged, object: nil, queue: .main) { [weak self] _ in
             self?.applyTheme()
         }
+        historyObserver = NotificationCenter.default.addObserver(
+            forName: .dittoHistoryChanged,
+            object: store,
+            queue: .main
+        ) { [weak self] _ in
+            self?.scheduleHistoryRefresh()
+        }
     }
 
     required init?(coder: NSCoder) { nil }
@@ -105,9 +114,31 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     deinit {
         if let keyEventMonitor { NSEvent.removeMonitor(keyEventMonitor) }
         if let themeObserver { NotificationCenter.default.removeObserver(themeObserver) }
+        if let historyObserver { NotificationCenter.default.removeObserver(historyObserver) }
+        pendingHistoryRefresh?.cancel()
     }
 
     func refresh() { applySearch() }
+
+    private func scheduleHistoryRefresh() {
+        guard let window, window.isVisible, window.isMiniaturized == false else { return }
+        let visibleRows = tableView.rows(in: tableView.visibleRect)
+        let keepNewestVisible = filteredEntries.isEmpty || visibleRows.location <= 1
+
+        pendingHistoryRefresh?.cancel()
+        let refresh = DispatchWorkItem { [weak self] in
+            guard let self,
+                  let window = self.window,
+                  window.isVisible,
+                  window.isMiniaturized == false else { return }
+            self.applySearch()
+            if keepNewestVisible, self.filteredEntries.isEmpty == false {
+                self.tableView.scrollRowToVisible(0)
+            }
+        }
+        pendingHistoryRefresh = refresh
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: refresh)
+    }
 
     func refreshText() {
         window?.title = LocalizationManager.shared.text("app_name")
@@ -1250,21 +1281,22 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
             searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
-            searchField.widthAnchor.constraint(equalToConstant: 220),
+            searchField.widthAnchor.constraint(greaterThanOrEqualToConstant: 180),
 
             modePopup.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
             modePopup.leadingAnchor.constraint(equalTo: searchField.trailingAnchor, constant: 8),
+            modePopup.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             modePopup.widthAnchor.constraint(equalToConstant: 110),
 
-            typeFilterPopup.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
-            typeFilterPopup.leadingAnchor.constraint(equalTo: modePopup.trailingAnchor, constant: 8),
-            typeFilterPopup.widthAnchor.constraint(equalToConstant: 130),
+            typeFilterPopup.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
+            typeFilterPopup.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
 
-            groupFilterPopup.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            groupFilterPopup.centerYAnchor.constraint(equalTo: typeFilterPopup.centerYAnchor),
+            groupFilterPopup.leadingAnchor.constraint(equalTo: typeFilterPopup.trailingAnchor, constant: 8),
             groupFilterPopup.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
-            groupFilterPopup.widthAnchor.constraint(equalToConstant: 170),
+            groupFilterPopup.widthAnchor.constraint(equalTo: typeFilterPopup.widthAnchor),
 
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 12),
+            scrollView.topAnchor.constraint(equalTo: countLabel.bottomAnchor, constant: 4),
             scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             scrollViewBottom,
@@ -1275,7 +1307,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             previewHeight,
 
             countLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
-            countLabel.bottomAnchor.constraint(equalTo: scrollView.topAnchor, constant: -2),
+            countLabel.topAnchor.constraint(equalTo: typeFilterPopup.bottomAnchor, constant: 6),
+            countLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -12),
 
             emptyStateLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             emptyStateLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
