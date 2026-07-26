@@ -216,12 +216,96 @@ enum SelfTest {
             let relocated = ClipboardStore(databaseURL: destinationURL)
             check("database relocation preserves history", relocated.entry(id: entry.id)?.text == "persist across restart")
 
+            check("healthy store reports healthy storage", source.health == .healthy)
+            check("relocated database passes quick_check", ClipboardStore(databaseURL: destinationURL).health == .healthy)
+
+            // A relocation into a folder that already holds a Ditto.db must
+            // refuse, and must not leave a half-written staging file behind.
+            var refusedExistingDatabase = false
+            do {
+                _ = try source.prepareDatabaseRelocation(to: destinationDirectory)
+            } catch {
+                refusedExistingDatabase = true
+            }
+            let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: destinationDirectory.path))?
+                .filter { $0.hasPrefix("Ditto-relocating-") } ?? []
+            check("relocation refuses to overwrite an existing database", refusedExistingDatabase)
+            check("failed relocation leaves no staging file", leftovers.isEmpty)
+
             source.removeEntry(id: entry.id)
             source.flush()
             let afterDeletion = ClipboardStore(databaseURL: sourceURL)
             check("incremental deletion persists across restart", afterDeletion.entry(id: entry.id) == nil)
         } catch {
             check("clipboard store persistence", false)
+        }
+
+        // MARK: Backups are self-contained (no WAL sidecar required)
+        do {
+            let walSourceURL = tempDir.appendingPathComponent("wal-source.db")
+            let walStore = ClipboardStore(databaseURL: walSourceURL)
+            _ = walStore.addClipboardPayload(text: "wal backup clip", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
+            let backupURL = tempDir.appendingPathComponent("standalone-backup.db")
+            try walStore.backupDatabase(to: backupURL)
+            // A backup of a WAL database used to inherit the WAL header, which
+            // cannot be opened read-only without a writable -shm.
+            let readOnlyBackup = try MacClipboardDatabase(url: backupURL, useWAL: false, readOnly: true)
+            check("backup opens read-only without sidecars", try readOnlyBackup.entryCount() == 1)
+            check("backup passes quick_check", readOnlyBackup.quickCheckResult() == "ok")
+
+            // Same file, sidecars deliberately absent: recovery must still work.
+            let walOnlyURL = tempDir.appendingPathComponent("wal-only.db")
+            try FileManager.default.copyItem(at: walSourceURL, to: walOnlyURL)
+            let destination = ClipboardStore(databaseURL: tempDir.appendingPathComponent("wal-import-target.db"))
+            try destination.importArchive(from: walOnlyURL)
+            check(
+                "wal-mode database imports without its -shm",
+                destination.snapshotEntries().contains { $0.text == "wal backup clip" }
+            )
+        } catch {
+            check("backup opens read-only without sidecars", false)
+            check("wal-mode database imports without its -shm", false)
+        }
+
+        // MARK: Capture dedup with a pinned clip on top
+        do {
+            let dedupStore = ClipboardStore(databaseURL: tempDir.appendingPathComponent("dedup.db"))
+            if let pinned = dedupStore.addClipboardPayload(text: "pinned top clip", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: []) {
+                dedupStore.toggleNeverAutoDelete(id: pinned.id)
+            }
+            // `entries.first` is now the pinned clip, so back-to-back dedup must
+            // not measure against it — this capture used to be dropped.
+            let captured = dedupStore.addClipboardPayload(text: "fresh clip", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
+            check("capture is kept when a pinned clip sits on top", captured?.text == "fresh clip")
+
+            // Copying the very same content again re-uses the row and returns it.
+            let repeated = dedupStore.addClipboardPayload(text: "fresh clip", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
+            check("back-to-back duplicate returns the same clip", repeated?.id == captured?.id)
+            check(
+                "back-to-back duplicate does not add a row",
+                dedupStore.snapshotEntries().filter { $0.text == "fresh clip" }.count == 1
+            )
+
+            // Re-copying something older promotes that exact row.
+            _ = dedupStore.addClipboardPayload(text: "another clip", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
+            let promoted = dedupStore.addClipboardPayload(text: "fresh clip", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
+            check("duplicate promotion returns the matching clip", promoted?.id == captured?.id)
+        }
+
+        // MARK: Shared blobs survive an overlapping import
+        do {
+            let shared = ClipboardStore(databaseURL: tempDir.appendingPathComponent("shared-blob-source.db"))
+            if let entry = shared.addClipboardPayload(text: "shared blob clip", rtfData: nil, htmlData: nil, imageData: nil, pdfData: pdfA, fileURLs: []),
+               let blobKey = entry.pdfBlobKey {
+                let archiveURL = tempDir.appendingPathComponent("shared-blob-archive.db")
+                try? shared.exportArchive(to: archiveURL)
+                // Re-importing over itself replaces the row; the blob it still
+                // points at must not be collected as an orphan.
+                try? shared.importArchive(from: archiveURL)
+                check("overlapping import keeps referenced blobs", shared.blobData(named: blobKey) == pdfA)
+            } else {
+                check("overlapping import keeps referenced blobs", false)
+            }
         }
 
         // MARK: Windows-compatible encryption round-trip (KeePass AES-KDF + CBC)
