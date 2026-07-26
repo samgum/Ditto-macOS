@@ -3,7 +3,7 @@ import Carbon
 import Foundation
 import UniformTypeIdentifiers
 
-final class PreferencesWindowController: NSWindowController {
+final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     private let store: ClipboardStore
     private let copyBufferManager: CopyBufferManager
     private let syncCoordinator: SyncCoordinator
@@ -11,6 +11,7 @@ final class PreferencesWindowController: NSWindowController {
 
     private let tabView = NSTabView()
     private let closeButton = NSButton(title: "", target: nil, action: nil)
+    private var frameBeforeTabSelection: NSRect?
 
     // General
     private let languagePopup = NSPopUpButton()
@@ -75,16 +76,19 @@ final class PreferencesWindowController: NSWindowController {
         self.onChanged = onChanged
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 760),
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("preferences")
-        window.center()
         super.init(window: window)
         configureContent()
+        // Center only after the tab labels and their final intrinsic widths have
+        // been laid out. Centering the placeholder frame first lets AppKit grow
+        // the window to one side when a longer localized tab is selected.
+        window.center()
     }
 
     required init?(coder: NSCoder) { nil }
@@ -100,6 +104,7 @@ final class PreferencesWindowController: NSWindowController {
 
     private func configureContent() {
         guard let window else { return }
+        let preservedFrame = window.contentView?.subviews.isEmpty == false ? window.frame : nil
 
         // Make re-runnable: drop any previously-built tabs + checkbox boxes so
         // refreshText() can rebuild cleanly in a new language.
@@ -109,6 +114,7 @@ final class PreferencesWindowController: NSWindowController {
         checkboxBoxes.removeAll()
 
         tabView.tabViewType = .topTabsBezelBorder
+        tabView.delegate = self
         tabView.translatesAutoresizingMaskIntoConstraints = false
 
         tabView.addTabViewItem(tab(LocalizationManager.shared.text("general")) { generalTab() })
@@ -140,9 +146,27 @@ final class PreferencesWindowController: NSWindowController {
             closeButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
             closeButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12)
         ])
+        root.layoutSubtreeIfNeeded()
+        if let preservedFrame {
+            window.setFrame(preservedFrame, display: false)
+        }
 
         populate()
         bindActions()
+    }
+
+    func tabView(_ tabView: NSTabView, willSelect tabViewItem: NSTabViewItem?) {
+        frameBeforeTabSelection = window?.frame
+    }
+
+    func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
+        guard let preservedFrame = frameBeforeTabSelection else { return }
+        window?.setFrame(preservedFrame, display: false)
+        // Some macOS versions perform a second intrinsic-size pass after the
+        // delegate callback when the selected page contains an NSScrollView.
+        DispatchQueue.main.async { [weak self] in
+            self?.window?.setFrame(preservedFrame, display: false)
+        }
     }
 
     private func tab(_ title: String, _ build: () -> NSView) -> NSTabViewItem {
