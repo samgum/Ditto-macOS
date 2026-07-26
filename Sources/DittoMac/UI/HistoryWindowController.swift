@@ -1443,6 +1443,33 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         applyWindowChrome()
     }
 
+    /// Laid-out frames of the header controls and the clip list, for the
+    /// `--selftest-ui` layout check. Header controls must never overlap each
+    /// other or the list, at any window size or in any language.
+    func headerLayoutProbe() -> [(name: String, frame: NSRect)] {
+        window?.contentView?.layoutSubtreeIfNeeded()
+        return [
+            ("search", searchField.frame),
+            ("mode", modePopup.frame),
+            ("type", typeFilterPopup.frame),
+            ("group", groupFilterPopup.frame),
+            ("count", countLabel.frame),
+            ("list", scrollView.frame)
+        ]
+    }
+
+    /// Width of the clip column relative to the whole table, so the clip text
+    /// keeps priority over the type and date columns.
+    func clipColumnWidthFraction() -> CGFloat {
+        window?.contentView?.layoutSubtreeIfNeeded()
+        let total = tableView.tableColumns.reduce(CGFloat(0)) { $0 + $1.width }
+        guard total > 0,
+              let clip = tableView.tableColumns.first(where: { $0.identifier.rawValue == "clip" }) else {
+            return 0
+        }
+        return clip.width / total
+    }
+
     @objc private func toggleAlwaysOnTop() {
         DittoSettings.alwaysOnTop.toggle()
         // The pin button is the sender; its state is already flipped by the

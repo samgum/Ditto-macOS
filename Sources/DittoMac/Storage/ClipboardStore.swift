@@ -123,14 +123,24 @@ final class ClipboardStore {
             }
         }
         load()
-        if isPersistent, databaseFileURL.standardizedFileURL != emergencyURL.standardizedFileURL {
+        // Only the app's own store absorbs the recovery files sitting in the
+        // application-support folder. A store opened on an explicit path — the
+        // self-tests, an archive, a relocated copy being verified — must never
+        // pull the live emergency database into itself.
+        if databaseURL == nil,
+           isPersistent,
+           databaseFileURL.standardizedFileURL != emergencyURL.standardizedFileURL {
             recoverDatabases(
                 in: directory,
                 emergencyURL: emergencyURL,
                 includeQuarantines: requestedURL.standardizedFileURL == defaultURL.standardizedFileURL
             )
         }
-        migrateLegacyJSONIfNeeded()
+        if databaseURL == nil {
+            // Same reasoning: the legacy history.json belongs to the app's own
+            // database, not to whatever path a caller asked for.
+            migrateLegacyJSONIfNeeded()
+        }
         enforceExpiry()
     }
 

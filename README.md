@@ -134,6 +134,25 @@ Expected self-test result:
 
 The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database persistence and SQLite-consistent backup/relocation round trips (including integrity verification, refusal to overwrite an existing database, and staging cleanup after a failed relocation), self-contained single-file backups, recovery of WAL-mode databases whose sidecars are missing, capture de-duplication with a pinned clip on top, shared-blob retention across an overlapping import, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
 
+Run the GUI layout check (needs a desktop session; not run in CI):
+
+```bash
+cd /Users/alexdavis/Ditto-macOS
+swift run DittoMac --selftest-ui
+```
+
+Expected layout self-test result:
+
+```text
+198 passed, 0 failed
+```
+
+It builds the real history window in all 11 languages, in light, dark and
+system appearance, at both the default 820×552 size and the 640×360 minimum,
+and asserts that the search box, search mode, type filter, group filter, clip
+count and clip list never overlap, that every control stays inside the content
+view, and that the clip column keeps more than half the table width.
+
 ## Package a DMG
 
 Build a release app bundle and DMG:
@@ -479,6 +498,7 @@ Sources/DittoMac/
 │   ├── main.swift
 │   ├── AppDelegate.swift
 │   ├── SelfTest.swift
+│   ├── LayoutSelfTest.swift
 │   └── SaveAnimation.swift
 ├── Models/
 │   ├── ClipboardEntry.swift

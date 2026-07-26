@@ -134,6 +134,24 @@ swift run DittoMac --selftest
 
 自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库持久化与 SQLite 一致性备份/迁移往返（含完整性校验、拒绝覆盖已存在的数据库、迁移失败后清理临时文件）、单文件自包含备份、缺少 -shm 时对 WAL 数据库的恢复、置顶记录位于列表顶部时的捕获去重、重叠导入时共享 blob 的保留、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
 
+运行界面布局检查（需要桌面会话，CI 中不执行）：
+
+```bash
+cd /Users/alexdavis/Ditto-macOS
+swift run DittoMac --selftest-ui
+```
+
+期望布局自测结果：
+
+```text
+198 passed, 0 failed
+```
+
+该检查会在 11 种语言、浅色/深色/跟随系统三种外观，以及默认 820×552 与最小
+640×360 两种尺寸下构建真实的历史窗口，断言搜索框、搜索模式、类型筛选、分组
+筛选、记录计数和剪贴列表互不重叠，所有控件都位于内容视图内，并且剪贴内容列
+始终占据表格一半以上的宽度。
+
 ## 打包 DMG
 
 构建 release 应用包并生成 DMG：
@@ -467,6 +485,7 @@ Sources/DittoMac/
 │   ├── main.swift
 │   ├── AppDelegate.swift
 │   ├── SelfTest.swift
+│   ├── LayoutSelfTest.swift
 │   └── SaveAnimation.swift
 ├── Models/
 │   ├── ClipboardEntry.swift
