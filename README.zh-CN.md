@@ -165,7 +165,6 @@ bash scripts/package-dmg.sh
 
 ```text
 dist/Ditto-macOS-1.2.6.dmg
-dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```
 
@@ -176,7 +175,7 @@ dist/Ditto-macOS.dmg
 - 复制 `Info.plist`、图标和本地化资源；
 - 对应用进行 ad-hoc 签名；
 - 创建拖拽到 Applications 的 DMG 布局；
-- 同时写出带版本号和不带版本号的 DMG。
+- 仅写出一个带版本号的 DMG，避免发布页出现含义不清的重复下载项。
 
 ## 安装与权限
 
@@ -636,7 +635,8 @@ CI 会：
 3. 运行 `swift run DittoMac --selftest`。
 4. 在 push、tag 和手动触发时打包 DMG。
 5. 上传 DMG artifact。
-6. 当 ref 是 `v*` tag 时创建 release 并附带 DMG 文件。
+6. 要求存在包含英文与简体中文内容的 `.github/release-notes/<tag>.md`。
+7. 当 ref 是 `v*` tag 时创建 release，并且只附带一个带版本号的 DMG。
 
 ## 已知限制
 

@@ -160,9 +160,6 @@ hdiutil detach -force "$MOUNT" 2>/dev/null || true
 hdiutil convert "$RW_DMG" -ov -format UDZO -imagekey zlib-level=9 -o "$DIST_DIR/$DMG_NAME"
 rm -f "$RW_DMG"
 
-# Also keep an unversioned copy for convenience/CI defaults.
-cp "$DIST_DIR/$DMG_NAME" "$DIST_DIR/Ditto-macOS.dmg"
-
 echo "==> Done: $DIST_DIR/$DMG_NAME (beautified: arrow + drag-to-Applications layout)"
 echo "    (Ad-hoc signed — to open on another Mac: right-click ▸ Open, or"
 echo "     approve in System Settings ▸ Privacy & Security.)"

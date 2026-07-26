@@ -66,10 +66,16 @@ jobs:
           path: .build/stage/Ditto.app
           if-no-files-found: ignore
 
+      - name: Require bilingual release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          NOTES=".github/release-notes/${GITHUB_REF_NAME}.md"
+          test -f "$NOTES"
+          grep -q '^# .*（简体中文）$' "$NOTES"
+
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/Ditto-macOS-*.dmg
-            dist/Ditto-macOS.dmg
+          body_path: .github/release-notes/${{ github.ref_name }}.md
+          files: dist/Ditto-macOS-*.dmg

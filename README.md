@@ -166,7 +166,6 @@ Generated outputs:
 
 ```text
 dist/Ditto-macOS-1.2.6.dmg
-dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```
 
@@ -177,7 +176,7 @@ The packaging script:
 - copies `Info.plist`, icon, and localization resources;
 - ad-hoc signs the app;
 - creates a drag-to-Applications DMG layout;
-- writes both a versioned and an unversioned DMG.
+- writes one versioned DMG so release downloads are unambiguous.
 
 ## Install and Permissions
 
@@ -649,7 +648,8 @@ The CI workflow:
 3. Runs `swift run DittoMac --selftest`.
 4. Packages a DMG on pushes, tags, and manual dispatch.
 5. Uploads the DMG artifact.
-6. Creates a release with DMG files when the ref is a `v*` tag.
+6. Requires `.github/release-notes/<tag>.md` with English and Simplified Chinese sections.
+7. Creates a release with one versioned DMG when the ref is a `v*` tag.
 
 ## Known Limitations
 
