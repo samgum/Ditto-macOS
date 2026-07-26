@@ -245,10 +245,30 @@ final class ClipboardStore {
             return entries.first { $0.id == entryID }
         }
 
-        let rtfBlobKey = saveBlob(rtfData, fileExtension: "rtf")
-        let htmlBlobKey = saveBlob(htmlData, fileExtension: "html")
-        let imageBlobKey = saveBlob(imageData, fileExtension: "png")
-        let pdfBlobKey = saveBlob(pdfData, fileExtension: "pdf")
+        var savedBlobKeys: [String] = []
+        func saveCaptureBlob(_ data: Data?, fileExtension: String) throws -> String? {
+            guard let data, data.isEmpty == false else { return nil }
+            let key = try database.saveBlob(data, fileExtension: fileExtension)
+            savedBlobKeys.append(key)
+            return key
+        }
+
+        let rtfBlobKey: String?
+        let htmlBlobKey: String?
+        let imageBlobKey: String?
+        let pdfBlobKey: String?
+        do {
+            rtfBlobKey = try saveCaptureBlob(rtfData, fileExtension: "rtf")
+            htmlBlobKey = try saveCaptureBlob(htmlData, fileExtension: "html")
+            imageBlobKey = try saveCaptureBlob(imageData, fileExtension: "png")
+            pdfBlobKey = try saveCaptureBlob(pdfData, fileExtension: "pdf")
+        } catch {
+            try? database.removeBlobs(keys: savedBlobKeys)
+            let failure = Self.describe(error)
+            health = .writeFailed(reason: failure)
+            NSLog("[Ditto] failed to save clipboard payload: \(failure)")
+            return nil
+        }
 
         let entry = ClipboardEntry(
             id: UUID(),
@@ -610,8 +630,12 @@ final class ClipboardStore {
                     importedEntries[index].imageBlobKey,
                     importedEntries[index].pdfBlobKey
                 ].compactMap({ $0 }) {
-                    guard let data = archiveDatabase.blobData(key: key) else { continue }
-                    _ = try? database.saveBlob(data, key: key, fileExtension: "")
+                    guard let data = archiveDatabase.blobData(key: key) else {
+                        throw MacClipboardDatabaseError.executeFailed(
+                            "The archive is missing clipboard attachment \(key)"
+                        )
+                    }
+                    _ = try database.saveBlob(data, key: key, fileExtension: "")
                 }
             }
             mergeImportedEntries(importedEntries)
@@ -740,7 +764,11 @@ final class ClipboardStore {
     // MARK: - Database maintenance
 
     func backupDatabase(to url: URL) throws {
-        flush()
+        guard flush() else {
+            throw MacClipboardDatabaseError.executeFailed(
+                health.reason ?? "Pending clipboard changes could not be saved"
+            )
+        }
         try database.backup(to: url)
     }
 
@@ -950,7 +978,14 @@ final class ClipboardStore {
 
     func saveBlob(_ data: Data?, fileExtension: String) -> String? {
         guard let data, data.isEmpty == false else { return nil }
-        return try? database.saveBlob(data, fileExtension: fileExtension)
+        do {
+            return try database.saveBlob(data, fileExtension: fileExtension)
+        } catch {
+            let failure = Self.describe(error)
+            health = .writeFailed(reason: failure)
+            NSLog("[Ditto] failed to save clipboard attachment: \(failure)")
+            return nil
+        }
     }
 
     func blobData(named key: String) -> Data? {
@@ -1102,7 +1137,7 @@ final class ClipboardStore {
                 // Only once the rows are gone: a rolled-back delete must not
                 // leave surviving rows pointing at removed payloads.
                 if blobsToDelete.isEmpty == false {
-                    self.database.removeBlobs(keys: Array(blobsToDelete))
+                    try self.database.removeBlobs(keys: Array(blobsToDelete))
                 }
             } catch {
                 failure = Self.describe(error)

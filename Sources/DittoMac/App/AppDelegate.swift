@@ -85,18 +85,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             guard let self else { return }
             Statistics.shared.recordCopy()
             self.syncCoordinator.broadcast(entry: entry)
-            // Never confirm a save the database didn't accept.
-            if self.store.health.isHealthy == false {
-                SaveNotifier.shared.showWarning(self.storageHealthMessage)
-            } else if DittoSettings.showSaveNotification {
+            if DittoSettings.showSaveNotification, self.store.health.isHealthy {
                 SaveNotifier.shared.show(entry.preview)
             }
             if DittoSettings.showSaveAnimation { SaveAnimation.shared.animate() }
         }
-        monitor.start()
         self.monitor = monitor
 
         registerNotifications()
+        monitor.start()
+        if store.health.isHealthy == false {
+            SaveNotifier.shared.showWarning(storageHealthMessage)
+        }
         registerPowerHandling()
         startSync()
         Self.log("launch complete — status item should be visible")
@@ -252,6 +252,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         }
         NotificationCenter.default.addObserver(forName: .dittoClipReceived, object: nil, queue: .main) { [weak self] notification in
             self?.handleReceivedClip(notification)
+        }
+        NotificationCenter.default.addObserver(forName: .dittoStorageHealthChanged, object: store, queue: .main) { [weak self] _ in
+            guard let self, self.store.health.isHealthy == false else { return }
+            SaveNotifier.shared.showWarning(self.storageHealthMessage)
         }
     }
 

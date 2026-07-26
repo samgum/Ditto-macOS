@@ -267,6 +267,31 @@ enum SelfTest {
             check("wal-mode database imports without its -shm", false)
         }
 
+        // MARK: Corrupt archives never create clips with missing attachments
+        do {
+            let brokenArchiveURL = tempDir.appendingPathComponent("missing-attachment.db")
+            let brokenArchive = try MacClipboardDatabase(url: brokenArchiveURL)
+            let missingKey = "missing-image-blob"
+            try brokenArchive.upsertEntry(
+                ClipboardEntry(text: "broken archive clip", imageBlobKey: missingKey)
+            )
+            let importTarget = ClipboardStore(
+                databaseURL: tempDir.appendingPathComponent("missing-attachment-target.db")
+            )
+            var rejected = false
+            do {
+                try importTarget.importArchive(from: brokenArchiveURL)
+            } catch {
+                rejected = true
+            }
+            check(
+                "archive with a missing attachment is rejected",
+                rejected && importTarget.snapshotEntries().isEmpty
+            )
+        } catch {
+            check("archive with a missing attachment is rejected", false)
+        }
+
         // MARK: Capture dedup with a pinned clip on top
         do {
             let dedupStore = ClipboardStore(databaseURL: tempDir.appendingPathComponent("dedup.db"))

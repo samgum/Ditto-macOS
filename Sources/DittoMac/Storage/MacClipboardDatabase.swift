@@ -584,12 +584,15 @@ final class MacClipboardDatabase {
         }
     }
 
-    func removeBlobs(keys: [String]) {
-        for key in keys {
-            _ = try? execute(
-                "DELETE FROM ClipBlobs WHERE blobKey = ?",
-                binds: { sqlite3_bind_text($0, 1, key, -1, databaseTransientDestructor) }
-            )
+    func removeBlobs(keys: [String]) throws {
+        guard keys.isEmpty == false else { return }
+        try transaction {
+            for key in keys {
+                try execute(
+                    "DELETE FROM ClipBlobs WHERE blobKey = ?",
+                    binds: { sqlite3_bind_text($0, 1, key, -1, databaseTransientDestructor) }
+                )
+            }
         }
     }
 
