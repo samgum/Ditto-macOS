@@ -18,11 +18,20 @@ final class SaveNotifier {
 
     func showTransient(_ preview: String) {
         DispatchQueue.main.async { [weak self] in
-            self?.present(preview)
+            self?.present(preview, symbol: "✓")
         }
     }
 
-    private func present(_ preview: String) {
+    /// Non-modal problem report. Always shown (it is never "just" a
+    /// confirmation) and never takes focus, so a storage failure reaches the
+    /// user without interrupting what they are typing.
+    func showWarning(_ message: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.present(message, symbol: "⚠", duration: 4)
+        }
+    }
+
+    private func present(_ preview: String, symbol: String, duration: TimeInterval = 1.2) {
         hideWorkItem?.cancel()
 
         if panel == nil {
@@ -54,7 +63,9 @@ final class SaveNotifier {
 
         let trimmed = preview.replacingOccurrences(of: "\n", with: " ⏎ ").trimmingCharacters(in: .whitespacesAndNewlines)
         let truncated = trimmed.count > 40 ? String(trimmed.prefix(40)) + "…" : trimmed
-        (panel?.contentView as? NSTextField)?.stringValue = "✓ " + truncated
+        let label = panel?.contentView as? NSTextField
+        label?.stringValue = "\(symbol) " + truncated
+        label?.toolTip = trimmed
         panel?.alphaValue = 1
 
         // Position below the menu-bar icon, top-right of the screen.
@@ -68,7 +79,7 @@ final class SaveNotifier {
             self?.dismiss()
         }
         hideWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
     }
 
     private func dismiss() {

@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto esta em execucao na barra de menus. %@: %@\n\nPara ativar a colagem automatica, permita o acesso em Ajustes do Sistema ▸ Privacidade e Seguranca ▸ Acessibilidade.",
   "accessibility_granted": "Acessibilidade ativada",
   "grant_accessibility": "Conceder acessibilidade…",
-  "backup_success": "Backup do banco de dados criado."
+  "backup_success": "Backup do banco de dados criado.",
+  "db_health": "Banco de dados",
+  "db_health_ok": "Saudável",
+  "db_health_problem": "Requer atenção",
+  "db_health_emergency": "Não foi possível abrir o banco de dados principal; o Ditto está usando o banco de emergência. O arquivo original não foi alterado.",
+  "db_health_memory_only": "Nenhum banco de dados gravável. O histórico fica apenas na memória e será perdido ao encerrar o Ditto.",
+  "db_health_write_failed": "O último item não pôde ser gravado no banco de dados.",
+  "show_in_finder": "Mostrar no Finder",
+  "quick_backup": "Fazer backup agora",
+  "existing_backups": "Backups",
+  "db_size": "Tamanho do banco de dados",
+  "available_space": "Espaço disponível",
+  "db_relocation_verified": "A cópia passou na verificação de integridade.",
+  "db_relocation_rolled_back": "Nada foi movido. O banco de dados atual permanece inalterado."
 }

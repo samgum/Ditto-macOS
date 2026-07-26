@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto is running in the menu bar. %@: %@\n\nTo enable paste, grant Accessibility permission in System Settings ▸ Privacy & Security.",
   "accessibility_granted": "Accessibility enabled",
   "grant_accessibility": "Grant Accessibility…",
-  "backup_success": "Database backup created."
+  "backup_success": "Database backup created.",
+  "db_health": "Database",
+  "db_health_ok": "Healthy",
+  "db_health_problem": "Needs attention",
+  "db_health_emergency": "The main database could not be opened; Ditto is using the emergency database. The original file was left untouched.",
+  "db_health_memory_only": "No writable database. Clipboard history is kept in memory only and will be lost when Ditto quits.",
+  "db_health_write_failed": "The last clip could not be written to the database.",
+  "show_in_finder": "Show in Finder",
+  "quick_backup": "Back Up Now",
+  "existing_backups": "Backups",
+  "db_size": "Database size",
+  "available_space": "Available space",
+  "db_relocation_verified": "The copy passed its integrity check.",
+  "db_relocation_rolled_back": "Nothing was moved. The current database is unchanged."
 }

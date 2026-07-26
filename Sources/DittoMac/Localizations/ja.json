@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto はメニューバーで実行中です。%@: %@\n\n自動ペーストを有効にするには、「システム設定 ▸ プライバシーとセキュリティ ▸ アクセシビリティ」で権限を付与してください。",
   "accessibility_granted": "アクセシビリティが有効",
   "grant_accessibility": "アクセシビリティを許可…",
-  "backup_success": "データベースのバックアップを作成しました。"
+  "backup_success": "データベースのバックアップを作成しました。",
+  "db_health": "データベース",
+  "db_health_ok": "正常",
+  "db_health_problem": "要確認",
+  "db_health_emergency": "メインのデータベースを開けなかったため、Ditto は緊急データベースを使用しています。元のファイルは変更していません。",
+  "db_health_memory_only": "書き込み可能なデータベースがありません。クリップボード履歴はメモリ上だけに保持され、Ditto の終了時に失われます。",
+  "db_health_write_failed": "直近のクリップをデータベースに書き込めませんでした。",
+  "show_in_finder": "Finder に表示",
+  "quick_backup": "今すぐバックアップ",
+  "existing_backups": "バックアップ",
+  "db_size": "データベースのサイズ",
+  "available_space": "空き容量",
+  "db_relocation_verified": "コピーは整合性チェックに合格しました。",
+  "db_relocation_rolled_back": "何も移動していません。現在のデータベースは変更されていません。"
 }

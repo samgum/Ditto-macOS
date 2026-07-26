@@ -5,14 +5,67 @@ import Foundation
 /// the behavioural rules from Windows Ditto: dedup, expiry, trimming, pinned
 /// clips, paste-counting, groups, and copy buffers.
 final class ClipboardStore {
+    /// Whether history is actually reaching disk. Anything other than
+    /// `.healthy` is surfaced in the UI (non-modally) so a clip is never shown
+    /// as saved when it was not.
+    enum Health: Equatable {
+        case healthy
+        /// The configured database could not be opened; the emergency file is
+        /// in use instead. The original file was left untouched.
+        case usingEmergencyDatabase(reason: String)
+        /// Neither the configured nor the emergency database could be opened.
+        /// History lives in memory only and is lost on quit.
+        case memoryOnly(reason: String)
+        /// The database opened, but the most recent write failed.
+        case writeFailed(reason: String)
+
+        var isHealthy: Bool { self == .healthy }
+
+        var reason: String? {
+            switch self {
+            case .healthy: return nil
+            case .usingEmergencyDatabase(let reason),
+                 .memoryOnly(let reason),
+                 .writeFailed(let reason):
+                return reason
+            }
+        }
+    }
+
     private static let recoveredQuarantinesKey = "Ditto.RecoveredQuarantinedDatabases"
     private let legacyFileURL: URL
     private let legacyDataDirectory: URL
     private let database: MacClipboardDatabase
     let databaseFileURL: URL
+    /// False when history is held in memory only (no writable database).
+    let isPersistent: Bool
     private(set) var entries: [ClipboardEntry] = []
     private(set) var groups: [ClipGroup] = []
     private var persistedEntriesByID: [UUID: ClipboardEntry] = [:]
+    /// Blob keys orphaned by a delete/update. They are removed only after the
+    /// matching entry change has actually committed, so a failed write can
+    /// never strip payloads from rows that still exist.
+    private var pendingBlobDeletions: Set<String> = []
+    /// CRC of the most recent capture. Back-to-back duplicate suppression has
+    /// to compare against this, not `entries.first` — the array is sorted with
+    /// pinned clips on top, so `entries.first` is usually not the last capture.
+    private var lastCapturedCRC: Int64?
+    private var healthStorage: Health = .healthy
+
+    private(set) var health: Health {
+        get { lock.lock(); defer { lock.unlock() }; return healthStorage }
+        set {
+            lock.lock()
+            let changed = healthStorage != newValue
+            healthStorage = newValue
+            lock.unlock()
+            guard changed else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                NotificationCenter.default.post(name: .dittoStorageHealthChanged, object: self)
+            }
+        }
+    }
 
     private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.store", qos: .utility)
 
@@ -47,15 +100,30 @@ final class ClipboardStore {
         do {
             database = try MacClipboardDatabase(url: requestedURL)
             databaseFileURL = requestedURL
+            isPersistent = true
         } catch {
             // A failed open can be transient (permissions, a stale lock, or an
             // interrupted migration). Never rename the user's only database.
-            NSLog("[Ditto] failed to open \(requestedURL.path): \(error). The original file was left untouched; using \(emergencyURL.lastPathComponent).")
-            database = try! MacClipboardDatabase(url: emergencyURL)
-            databaseFileURL = emergencyURL
+            let reason = Self.describe(error)
+            NSLog("[Ditto] failed to open \(requestedURL.path): \(reason). The original file was left untouched; using \(emergencyURL.lastPathComponent).")
+            do {
+                database = try MacClipboardDatabase(url: emergencyURL)
+                databaseFileURL = emergencyURL
+                isPersistent = true
+                healthStorage = .usingEmergencyDatabase(reason: reason)
+            } catch {
+                // Even the emergency file is unusable (read-only volume, no
+                // space, revoked permissions). Keep the app alive on a volatile
+                // database rather than aborting at launch, and say so loudly.
+                NSLog("[Ditto] failed to open the emergency database: \(Self.describe(error)). History will not be saved to disk.")
+                database = MacClipboardDatabase.inMemoryFallback()
+                databaseFileURL = emergencyURL
+                isPersistent = false
+                healthStorage = .memoryOnly(reason: Self.describe(error))
+            }
         }
         load()
-        if databaseFileURL.standardizedFileURL != emergencyURL.standardizedFileURL {
+        if isPersistent, databaseFileURL.standardizedFileURL != emergencyURL.standardizedFileURL {
             recoverDatabases(
                 in: directory,
                 emergencyURL: emergencyURL,
@@ -64,6 +132,21 @@ final class ClipboardStore {
         }
         migrateLegacyJSONIfNeeded()
         enforceExpiry()
+    }
+
+    /// Human-readable one-liner for an error, so failures reach the user as
+    /// something actionable instead of "Operation failed."
+    static func describe(_ error: Error) -> String {
+        switch error {
+        case let databaseError as MacClipboardDatabaseError:
+            switch databaseError {
+            case .openFailed(let message): return message
+            case .prepareFailed(let message): return message
+            case .executeFailed(let message): return message
+            }
+        default:
+            return (error as NSError).localizedDescription
+        }
     }
 
     // MARK: - Capture
@@ -117,31 +200,39 @@ final class ClipboardStore {
         )
 
         // Back-to-back duplicate suppression (identical to the last capture).
-        if let first = entries.first,
-           first.crc == newCRC,
-           DittoSettings.allowBackToBackDuplicates == false {
-            // Still bubble it to the top + refresh timestamp, like Windows
-            // (it re-uses the same row rather than dropping the copy).
-            if let idx = entries.indices.first, entries[idx].isPinned == false {
-                entries[idx].clipOrder = (entries.map(\.clipOrder).max() ?? Date().timeIntervalSince1970) + 1
-                entries[idx].createdAt = Date()
+        // Compare against the recorded last capture, not `entries.first`:
+        // pinned clips sort to the top, so `entries.first` is frequently an old
+        // pinned clip. Matching on it used to drop the capture entirely.
+        if DittoSettings.allowBackToBackDuplicates == false,
+           newCRC != 0,
+           lastCapturedCRC == newCRC,
+           let matchIndex = entries.firstIndex(where: { $0.crc == newCRC }) {
+            // Re-use the same row rather than dropping the copy, like Windows.
+            let entryID = entries[matchIndex].id
+            if entries[matchIndex].isPinned == false {
+                entries[matchIndex].clipOrder = nextClipOrder()
+                entries[matchIndex].createdAt = Date()
                 repinOrdering()
-                persist()
-                return entries[idx]
             }
-            return nil
+            persist()
+            return entries.first { $0.id == entryID }
         }
 
         // Global duplicate suppression — Windows keeps the SAME row and moves it
         // to the top, preserving favorite/pin/paste-count/group/shortcut. Mirror
         // that: promote the existing entry instead of delete+reinsert.
         if DittoSettings.allowDuplicates == false,
-           let matchIndex = entries.firstIndex(where: { $0.crc == newCRC && $0.isPinned == false && $0.crc != 0 }) {
-            entries[matchIndex].clipOrder = (entries.filter { $0.isPinned == false }.map(\.clipOrder).max() ?? Date().timeIntervalSince1970) + 1
+           newCRC != 0,
+           let matchIndex = entries.firstIndex(where: { $0.crc == newCRC && $0.isPinned == false }) {
+            let entryID = entries[matchIndex].id
+            entries[matchIndex].clipOrder = nextClipOrder()
             entries[matchIndex].createdAt = Date()
             repinOrdering()
+            lastCapturedCRC = newCRC
             persist()
-            return entries[matchIndex]
+            // `repinOrdering` re-sorts, so look the row up by id — indexing
+            // with the stale offset returned an unrelated clip.
+            return entries.first { $0.id == entryID }
         }
 
         let rtfBlobKey = saveBlob(rtfData, fileExtension: "rtf")
@@ -163,11 +254,19 @@ final class ClipboardStore {
         )
 
         entries.insert(entry, at: 0)
+        lastCapturedCRC = newCRC
         // Pinned clips always sit above the newest non-pinned clip.
         repinOrdering()
         trim()
         persist()
         return entry
+    }
+
+    /// One above the newest non-pinned clip, so a promoted duplicate lands at
+    /// the top of the unpinned section.
+    private func nextClipOrder() -> Double {
+        let highest = entries.filter { $0.isPinned == false }.map(\.clipOrder).max()
+        return (highest ?? Date().timeIntervalSince1970) + 1
     }
 
     // MARK: - Lookups
@@ -180,13 +279,8 @@ final class ClipboardStore {
     func update(_ entry: ClipboardEntry) {
         lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
-        let oldBlobKeys = Set(blobKeys(for: entries[index]))
+        pendingBlobDeletions.formUnion(blobKeys(for: entries[index]))
         entries[index] = entry
-        let currentBlobKeys = Set(entries.flatMap(blobKeys(for:)))
-        let obsoleteBlobKeys = oldBlobKeys
-            .subtracting(Set(blobKeys(for: entry)))
-            .subtracting(currentBlobKeys)
-        database.removeBlobs(keys: Array(obsoleteBlobKeys))
         persist()
     }
 
@@ -492,25 +586,67 @@ final class ClipboardStore {
     }
 
     func importArchive(from url: URL) throws {
-        let archiveDatabase = try MacClipboardDatabase(url: url, useWAL: false, readOnly: true)
-        let archivedGroups = try archiveDatabase.loadGroups()
-        let groupIDs = importGroups(archivedGroups)
-        var importedEntries = try archiveDatabase.loadEntries()
-        for index in importedEntries.indices {
-            if let groupID = importedEntries[index].groupId {
-                importedEntries[index].groupId = groupIDs[groupID]
+        try withArchiveDatabase(at: url) { archiveDatabase in
+            let archivedGroups = try archiveDatabase.loadGroups()
+            let groupIDs = importGroups(archivedGroups)
+            var importedEntries = try archiveDatabase.loadEntries()
+            for index in importedEntries.indices {
+                if let groupID = importedEntries[index].groupId {
+                    importedEntries[index].groupId = groupIDs[groupID]
+                }
+                for key in [
+                    importedEntries[index].rtfBlobKey,
+                    importedEntries[index].htmlBlobKey,
+                    importedEntries[index].imageBlobKey,
+                    importedEntries[index].pdfBlobKey
+                ].compactMap({ $0 }) {
+                    guard let data = archiveDatabase.blobData(key: key) else { continue }
+                    _ = try? database.saveBlob(data, key: key, fileExtension: "")
+                }
             }
-            for key in [
-                importedEntries[index].rtfBlobKey,
-                importedEntries[index].htmlBlobKey,
-                importedEntries[index].imageBlobKey,
-                importedEntries[index].pdfBlobKey
-            ].compactMap({ $0 }) {
-                guard let data = archiveDatabase.blobData(key: key) else { continue }
-                _ = try? database.saveBlob(data, key: key, fileExtension: "")
-            }
+            mergeImportedEntries(importedEntries)
         }
-        mergeImportedEntries(importedEntries)
+    }
+
+    /// Opens a database we only want to read from.
+    ///
+    /// A read-only connection is preferred — it cannot alter the source. But a
+    /// database still in WAL mode (every emergency and quarantined file is)
+    /// needs a writable `-shm`, so a read-only open of one whose sidecar is
+    /// missing fails with "unable to open database file" and the data becomes
+    /// unrecoverable. In that case the file is copied — sidecars included — and
+    /// the copy is opened read-write, so SQLite can replay the WAL while the
+    /// original stays byte-for-byte untouched.
+    private func withArchiveDatabase<T>(at url: URL, _ body: (MacClipboardDatabase) throws -> T) throws -> T {
+        if let readable = Self.openReadOnly(url) {
+            return try body(readable)
+        }
+        let copy = try Self.copyDatabaseForRecovery(at: url)
+        defer { Self.removeDatabaseFiles(at: copy) }
+        return try body(try MacClipboardDatabase(url: copy))
+    }
+
+    private static func openReadOnly(_ url: URL) -> MacClipboardDatabase? {
+        guard let database = try? MacClipboardDatabase(url: url, useWAL: false, readOnly: true),
+              (try? database.entryCount()) != nil else {
+            return nil
+        }
+        return database
+    }
+
+    private static func copyDatabaseForRecovery(at url: URL) throws -> URL {
+        let manager = FileManager.default
+        let directory = manager.temporaryDirectory
+            .appendingPathComponent("ditto-recovery-\(UUID().uuidString)", isDirectory: true)
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let copy = directory.appendingPathComponent(url.lastPathComponent)
+        try manager.copyItem(at: url, to: copy)
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = URL(fileURLWithPath: url.path + suffix)
+            guard manager.fileExists(atPath: sidecar.path) else { continue }
+            try? manager.copyItem(at: sidecar, to: URL(fileURLWithPath: copy.path + suffix))
+        }
+        return copy
     }
 
     @discardableResult
@@ -557,16 +693,31 @@ final class ClipboardStore {
     // MARK: - Maintenance
 
     func removeAll() {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
         entries.removeAll()
         groups.removeAll()
+        pendingBlobDeletions.removeAll()
+        lastCapturedCRC = nil
+        lock.unlock()
+
+        var failure: String?
         queue.sync {
             do {
                 try database.removeAll()
                 persistedEntriesByID.removeAll()
             } catch {
-                NSLog("[Ditto] failed to clear clipboard database: \(error)")
+                failure = Self.describe(error)
+                NSLog("[Ditto] failed to clear clipboard database: \(failure ?? "")")
             }
+        }
+        if let failure {
+            health = .writeFailed(reason: failure)
+        } else if isPersistent, case .writeFailed = health {
+            health = .healthy
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.post(name: .dittoHistoryChanged, object: self)
         }
     }
 
@@ -583,42 +734,170 @@ final class ClipboardStore {
         try database.backup(to: url)
     }
 
+    /// Folder the one-click backups land in, next to the live database.
+    var backupsDirectory: URL {
+        databaseFileURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("Backups", isDirectory: true)
+    }
+
+    /// One-click, SQLite-consistent backup into `backupsDirectory`.
+    @discardableResult
+    func createTimestampedBackup() throws -> URL {
+        guard isPersistent else {
+            throw MacClipboardDatabaseError.executeFailed(
+                "The current history is held in memory only and cannot be backed up"
+            )
+        }
+        let url = backupsDirectory
+            .appendingPathComponent("Ditto-Backup-\(Self.timestampFormatter.string(from: Date())).db")
+        try backupDatabase(to: url)
+        return url
+    }
+
+    /// Existing backups, newest first.
+    func existingBackups() -> [(url: URL, date: Date, size: Int64)] {
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: backupsDirectory,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return contents
+            .filter { $0.pathExtension == "db" }
+            .compactMap { url in
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                return (
+                    url,
+                    values?.contentModificationDate ?? Date(timeIntervalSince1970: 0),
+                    Int64(values?.fileSize ?? 0)
+                )
+            }
+            .sorted { $0.date > $1.date }
+    }
+
     /// Creates a complete SQLite-consistent copy of the current history in a
     /// user-selected folder. The app switches to it after restart, while the
     /// previous database remains intact until the user confirms everything is
     /// present in the new location.
+    ///
+    /// The copy is written to a staging file, integrity-checked and row-counted
+    /// against the live database, and only then renamed into place. Any failure
+    /// removes the staging file, so a half-written relocation can never be
+    /// adopted and never blocks a retry.
     func prepareDatabaseRelocation(to directory: URL) throws -> URL {
+        let manager = FileManager.default
         let destination = directory.appendingPathComponent("Ditto.db")
         guard destination.standardizedFileURL != databaseFileURL.standardizedFileURL else {
             return destination
         }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        guard FileManager.default.fileExists(atPath: destination.path) == false else {
+        guard isPersistent else {
+            throw MacClipboardDatabaseError.executeFailed(
+                "The current history is held in memory only and cannot be relocated"
+            )
+        }
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard manager.fileExists(atPath: destination.path) == false else {
             throw MacClipboardDatabaseError.executeFailed("A Ditto.db file already exists in the selected folder")
         }
-        try backupDatabase(to: destination)
+        try verifyFreeSpace(in: directory)
+
+        let staging = directory.appendingPathComponent("Ditto-relocating-\(UUID().uuidString).db")
+        do {
+            try backupDatabase(to: staging)
+            let expectedCount = snapshotEntries().count
+            let (checkResult, copiedCount) = try Self.inspect(databaseAt: staging)
+            guard checkResult == "ok" else {
+                throw MacClipboardDatabaseError.executeFailed(
+                    "The copied database failed its integrity check (\(checkResult))"
+                )
+            }
+            guard copiedCount >= expectedCount else {
+                throw MacClipboardDatabaseError.executeFailed(
+                    "The copy holds \(copiedCount) of \(expectedCount) clips"
+                )
+            }
+            try manager.moveItem(at: staging, to: destination)
+        } catch {
+            Self.removeDatabaseFiles(at: staging)
+            throw error
+        }
         return destination
     }
 
-    /// Waits for all queued history writes. Call this before app termination
-    /// and before creating a database relocation copy.
-    func flush() {
-        persist()
-        queue.sync {}
-        do {
-            try database.checkpoint()
-        } catch {
-            NSLog("[Ditto] failed to checkpoint clipboard database: \(error)")
+    /// Opens `url` read-only just long enough to report its health, so the
+    /// connection is closed before the caller renames the file.
+    private static func inspect(databaseAt url: URL) throws -> (quickCheck: String, entryCount: Int) {
+        let database = try MacClipboardDatabase(url: url, useWAL: false, readOnly: true)
+        return (database.quickCheckResult(), try database.entryCount())
+    }
+
+    private static func removeDatabaseFiles(at url: URL) {
+        let manager = FileManager.default
+        for path in [url.path, url.path + "-wal", url.path + "-shm"] where manager.fileExists(atPath: path) {
+            try? manager.removeItem(atPath: path)
+        }
+        // Recovery copies live in a throwaway directory of their own.
+        let parent = url.deletingLastPathComponent()
+        if parent.lastPathComponent.hasPrefix("ditto-recovery-") {
+            try? manager.removeItem(at: parent)
         }
     }
 
-    func compactDatabase() {
-        flush()
-        do {
-            try database.vacuum()
-        } catch {
-            NSLog("[Ditto] failed to compact clipboard database: \(error)")
+    /// Bytes the live database currently occupies, including its WAL sidecar.
+    func databaseByteSize() -> Int64 {
+        let manager = FileManager.default
+        return [databaseFileURL.path, databaseFileURL.path + "-wal"].reduce(into: Int64(0)) { total, path in
+            let size = (try? manager.attributesOfItem(atPath: path)[.size] as? Int64) ?? nil
+            total += size ?? 0
         }
+    }
+
+    /// Free capacity of the volume holding `directory`, or nil when unknown.
+    static func availableCapacity(at directory: URL) -> Int64? {
+        try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            .volumeAvailableCapacityForImportantUsage
+    }
+
+    private func verifyFreeSpace(in directory: URL) throws {
+        guard let available = Self.availableCapacity(at: directory) else { return }
+        // The copy needs room for the database plus a little slack for the
+        // journal it writes while filling up.
+        let required = databaseByteSize() + 8 * 1_024 * 1_024
+        guard available >= required else {
+            throw MacClipboardDatabaseError.executeFailed(
+                "The selected volume has \(ByteCountFormatter.string(fromByteCount: available, countStyle: .file)) free; "
+                + "\(ByteCountFormatter.string(fromByteCount: required, countStyle: .file)) is needed"
+            )
+        }
+    }
+
+    /// Waits for all queued history writes and truncates the WAL. Call this
+    /// before app termination and before creating a database relocation copy.
+    @discardableResult
+    func flush() -> Bool {
+        let persisted = persist()
+        queue.sync {}
+        guard isPersistent else { return false }
+        do {
+            try database.checkpoint()
+        } catch {
+            // A busy checkpoint is not data loss (the WAL still holds the
+            // committed pages), so this does not flip the health state.
+            NSLog("[Ditto] failed to checkpoint clipboard database: \(Self.describe(error))")
+            return persisted
+        }
+        return persisted
+    }
+
+    func compactDatabase() throws {
+        flush()
+        guard isPersistent else {
+            throw MacClipboardDatabaseError.executeFailed(
+                "The current history is held in memory only and cannot be compacted"
+            )
+        }
+        try database.vacuum()
     }
 
     /// Delete clips that have never been pasted and aren't pinned.
@@ -632,21 +911,31 @@ final class ClipboardStore {
         lock.lock(); defer { lock.unlock() }
         guard DittoSettings.checkExpiredEntries else { return }
         let cutoff = Date().addingTimeInterval(-TimeInterval(DittoSettings.expiredEntriesDays) * 86_400)
-        let expired = entries.filter { $0.createdAt < cutoff && $0.isPinned == false }
-        guard expired.isEmpty == false else { return }
-        removeEntries { expired.contains($0) }
+        // Match on ids: comparing whole entries made this O(n·m) over full
+        // struct equality, which is measurable on large histories.
+        let expiredIDs = Set(
+            entries.filter { $0.createdAt < cutoff && $0.isPinned == false }.map(\.id)
+        )
+        guard expiredIDs.isEmpty == false else { return }
+        removeEntries { expiredIDs.contains($0.id) }
         persist()
     }
 
     private func removeEntries(where predicate: (ClipboardEntry) -> Bool) {
         let removed = entries.filter(predicate)
+        guard removed.isEmpty == false else { return }
         for entry in removed {
             try? database.clearCopyBufferReferences(for: entry.id)
         }
         entries.removeAll(where: predicate)
-        let referencedBlobKeys = Set(entries.flatMap(blobKeys(for:)))
-        let removedBlobKeys = Set(removed.flatMap(blobKeys(for:))).subtracting(referencedBlobKeys)
-        database.removeBlobs(keys: Array(removedBlobKeys))
+        if let lastCapturedCRC, removed.contains(where: { $0.crc == lastCapturedCRC }) {
+            // The row the next capture would have been deduplicated against is
+            // gone; forget it so re-copying the same content is stored again.
+            self.lastCapturedCRC = nil
+        }
+        // Deleted lazily by `persist()` once the row removal has committed, and
+        // only for keys no surviving clip still references.
+        pendingBlobDeletions.formUnion(removed.flatMap(blobKeys(for:)))
     }
 
     func saveBlob(_ data: Data?, fileExtension: String) -> String? {
@@ -746,6 +1035,9 @@ final class ClipboardStore {
             let loadedEntries = try database.loadEntries()
             entries = loadedEntries
             persistedEntriesByID = Dictionary(uniqueKeysWithValues: loadedEntries.map { ($0.id, $0) })
+            // Seed back-to-back dedup from the newest clip on disk so the first
+            // capture after a relaunch isn't stored twice.
+            lastCapturedCRC = loadedEntries.max(by: { $0.createdAt < $1.createdAt })?.crc
         } catch {
             NSLog("[Ditto] failed to load clipboard entries: \(error)")
         }
@@ -757,31 +1049,65 @@ final class ClipboardStore {
         }
     }
 
-    private func persist() {
+    /// Writes the in-memory history to the database.
+    ///
+    /// Returns `false` when the write failed, so callers never report a clip as
+    /// saved that is not on disk. The clip stays in memory (it remains
+    /// pasteable) and `health` flips to `.writeFailed` so the UI can say so.
+    @discardableResult
+    private func persist() -> Bool {
         lock.lock()
         let snapshotByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        let referencedBlobKeys = Set(entries.flatMap(blobKeys(for:)))
+        // Never drop a blob a surviving clip still points at — an archive
+        // import re-uses the source keys, so a replaced clip can share them.
+        let blobsToDelete = pendingBlobDeletions.subtracting(referencedBlobKeys)
+        pendingBlobDeletions.removeAll()
         lock.unlock()
 
-        let historyChanged = queue.sync { () -> Bool in
+        var historyChanged = false
+        var failure: String?
+
+        queue.sync {
             let changedEntries = snapshotByID.values.filter {
                 self.persistedEntriesByID[$0.id] != $0
             }
             let deletedIDs = self.persistedEntriesByID.keys.filter {
                 snapshotByID[$0] == nil
             }
-            guard changedEntries.isEmpty == false || deletedIDs.isEmpty == false else {
-                return false
+            guard changedEntries.isEmpty == false
+                || deletedIDs.isEmpty == false
+                || blobsToDelete.isEmpty == false else {
+                return
             }
+            historyChanged = changedEntries.isEmpty == false || deletedIDs.isEmpty == false
             do {
-                try self.database.applyEntryChanges(
-                    upserting: changedEntries,
-                    deleting: deletedIDs
-                )
-                self.persistedEntriesByID = snapshotByID
+                if historyChanged {
+                    try self.database.applyEntryChanges(
+                        upserting: changedEntries,
+                        deleting: deletedIDs
+                    )
+                    self.persistedEntriesByID = snapshotByID
+                }
+                // Only once the rows are gone: a rolled-back delete must not
+                // leave surviving rows pointing at removed payloads.
+                if blobsToDelete.isEmpty == false {
+                    self.database.removeBlobs(keys: Array(blobsToDelete))
+                }
             } catch {
-                NSLog("[Ditto] failed to persist clipboard entries: \(error)")
+                failure = Self.describe(error)
+                NSLog("[Ditto] failed to persist clipboard entries: \(failure ?? "")")
             }
-            return true
+        }
+
+        if let failure {
+            // Retry the orphaned-blob sweep on the next write.
+            lock.lock()
+            pendingBlobDeletions.formUnion(blobsToDelete)
+            lock.unlock()
+            health = .writeFailed(reason: failure)
+        } else if isPersistent, case .writeFailed = health {
+            health = .healthy
         }
 
         if historyChanged {
@@ -790,6 +1116,7 @@ final class ClipboardStore {
                 NotificationCenter.default.post(name: .dittoHistoryChanged, object: self)
             }
         }
+        return failure == nil
     }
 
     private func recoverDatabases(
@@ -807,6 +1134,7 @@ final class ClipboardStore {
 
         var recovered = previouslyRecovered
         var recoveredEntries = 0
+        var recoveredEmergency = false
         for url in urls {
             let isEmergency = url.standardizedFileURL == emergencyURL.standardizedFileURL
             let isQuarantine = includeQuarantines
@@ -825,18 +1153,55 @@ final class ClipboardStore {
                 try importArchive(from: url)
                 recoveredEntries += max(0, snapshotEntries().count - countBefore)
                 recovered.insert(marker)
+                if isEmergency { recoveredEmergency = true }
             } catch {
                 // Keep the file in place for manual recovery if it genuinely
                 // cannot be read. A failed recovery never deletes data.
                 NSLog("[Ditto] unable to recover \(url.lastPathComponent): \(error)")
             }
         }
-        if recoveredEntries > 0 {
+        if recoveredEntries > 0 || recoveredEmergency {
             flush()
             NSLog("[Ditto] recovered \(recoveredEntries) clipboard entries from previously quarantined databases.")
         }
+        // Only after the merge has committed: the emergency file is reused
+        // whenever the main database is unavailable, so leaving it in place
+        // means the next failure grows it and re-imports everything again —
+        // which resets paste counts, groups and favorites on those clips.
+        // Archiving keeps the data without letting it be imported twice.
+        if recoveredEmergency {
+            archiveRecoveredEmergencyDatabase(at: emergencyURL, in: directory)
+        }
         UserDefaults.standard.set(Array(recovered), forKey: Self.recoveredQuarantinesKey)
     }
+
+    private func archiveRecoveredEmergencyDatabase(at emergencyURL: URL, in directory: URL) {
+        let manager = FileManager.default
+        let backups = directory.appendingPathComponent("Backups", isDirectory: true)
+        do {
+            try manager.createDirectory(at: backups, withIntermediateDirectories: true)
+            let stamp = Self.timestampFormatter.string(from: Date())
+            let archived = backups.appendingPathComponent("Ditto-emergency-recovered-\(stamp).db")
+            try manager.moveItem(at: emergencyURL, to: archived)
+            for suffix in ["-wal", "-shm"] {
+                let sidecar = URL(fileURLWithPath: emergencyURL.path + suffix)
+                if manager.fileExists(atPath: sidecar.path) {
+                    try? manager.moveItem(at: sidecar, to: URL(fileURLWithPath: archived.path + suffix))
+                }
+            }
+            NSLog("[Ditto] archived the recovered emergency database to \(archived.path)")
+        } catch {
+            NSLog("[Ditto] could not archive the recovered emergency database: \(Self.describe(error))")
+        }
+    }
+
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter
+    }()
 
     // MARK: - Legacy migration
 

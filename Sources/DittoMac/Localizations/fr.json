@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto s execute dans la barre des menus. %@ : %@\n\nPour activer le collage automatique, accordez l acces dans Reglages Systeme ▸ Confidentialite et securite ▸ Accessibilite.",
   "accessibility_granted": "Accessibilite activee",
   "grant_accessibility": "Accorder l accesibilite…",
-  "backup_success": "Sauvegarde de la base de donnees creee."
+  "backup_success": "Sauvegarde de la base de donnees creee.",
+  "db_health": "Base de données",
+  "db_health_ok": "Saine",
+  "db_health_problem": "À vérifier",
+  "db_health_emergency": "Impossible d’ouvrir la base principale ; Ditto utilise la base de secours. Le fichier d’origine n’a pas été modifié.",
+  "db_health_memory_only": "Aucune base accessible en écriture. L’historique reste en mémoire et sera perdu à la fermeture de Ditto.",
+  "db_health_write_failed": "Le dernier élément n’a pas pu être écrit dans la base de données.",
+  "show_in_finder": "Afficher dans le Finder",
+  "quick_backup": "Sauvegarder maintenant",
+  "existing_backups": "Sauvegardes",
+  "db_size": "Taille de la base",
+  "available_space": "Espace disponible",
+  "db_relocation_verified": "La copie a réussi son contrôle d’intégrité.",
+  "db_relocation_rolled_back": "Rien n’a été déplacé. La base actuelle est inchangée."
 }

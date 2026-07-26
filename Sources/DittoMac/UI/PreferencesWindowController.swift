@@ -687,7 +687,15 @@ final class PreferencesWindowController: NSWindowController {
         databaseChooseButton.target = self
         databaseChooseButton.action = #selector(chooseDatabaseLocation)
         databaseChooseButton.translatesAutoresizingMaskIntoConstraints = false
-        let stack = NSStackView(views: [databasePathField, databaseChooseButton])
+        databasePathField.toolTip = displayedDatabasePath
+        let revealButton = NSButton(
+            title: LocalizationManager.shared.text("show_in_finder"),
+            target: self,
+            action: #selector(revealDatabaseFromPrefs)
+        )
+        revealButton.bezelStyle = .rounded
+        revealButton.translatesAutoresizingMaskIntoConstraints = false
+        let stack = NSStackView(views: [databasePathField, databaseChooseButton, revealButton])
         stack.orientation = .horizontal
         stack.spacing = 8
         stack.distribution = .fill
@@ -753,7 +761,26 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     @objc private func compactDatabaseFromPrefs() {
-        store.compactDatabase()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            var message = LocalizationManager.shared.text("compact_done")
+            do {
+                try self.store.compactDatabase()
+            } catch {
+                message = LocalizationManager.shared.text("operation_failed")
+                    + "\n" + ClipboardStore.describe(error)
+            }
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = LocalizationManager.shared.text("app_name")
+                alert.informativeText = message
+                alert.runModal()
+            }
+        }
+    }
+
+    @objc private func revealDatabaseFromPrefs() {
+        NSWorkspace.shared.activateFileViewerSelecting([store.databaseFileURL])
     }
 
     @objc private func chooseDatabaseLocation() {
@@ -764,6 +791,7 @@ final class PreferencesWindowController: NSWindowController {
         panel.directoryURL = store.databaseFileURL.deletingLastPathComponent()
         panel.begin { [weak self] response in
             guard response == .OK, let directory = panel.url, let self else { return }
+            guard self.confirmRelocation(to: directory) else { return }
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let url = try self.store.prepareDatabaseRelocation(to: directory)
@@ -771,7 +799,10 @@ final class PreferencesWindowController: NSWindowController {
                         DittoSettings.databasePath = url.path
                         self.databasePathField.stringValue = url.path
                         let alert = NSAlert()
-                        alert.messageText = LocalizationManager.shared.text("restart_needed")
+                        alert.messageText = LocalizationManager.shared.text("app_name")
+                        alert.informativeText = url.path + "\n\n"
+                            + LocalizationManager.shared.text("db_relocation_verified") + "\n"
+                            + LocalizationManager.shared.text("restart_needed")
                         alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
                         alert.runModal()
                     }
@@ -779,12 +810,36 @@ final class PreferencesWindowController: NSWindowController {
                     DispatchQueue.main.async {
                         let alert = NSAlert()
                         alert.messageText = LocalizationManager.shared.text("operation_failed")
+                        // The old database is untouched on every failure path;
+                        // say so instead of leaving the user guessing.
+                        alert.informativeText = ClipboardStore.describe(error) + "\n\n"
+                            + LocalizationManager.shared.text("db_relocation_rolled_back")
                         alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
                         alert.runModal()
                     }
                 }
             }
         }
+    }
+
+    /// Shows the exact destination and the space it needs before anything is
+    /// copied, so a relocation is never a blind operation.
+    private func confirmRelocation(to directory: URL) -> Bool {
+        let destination = directory.appendingPathComponent("Ditto.db")
+        let needed = ByteCountFormatter.string(fromByteCount: store.databaseByteSize(), countStyle: .file)
+        let available = ClipboardStore.availableCapacity(at: directory)
+            .map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+            ?? "—"
+        let alert = NSAlert()
+        alert.messageText = LocalizationManager.shared.text("database_location")
+        alert.informativeText = [
+            destination.path,
+            "\(LocalizationManager.shared.text("db_size")): \(needed)",
+            "\(LocalizationManager.shared.text("available_space")): \(available)"
+        ].joined(separator: "\n")
+        alert.addButton(withTitle: LocalizationManager.shared.text("ok"))
+        alert.addButton(withTitle: LocalizationManager.shared.text("cancel"))
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private var displayedDatabasePath: String {

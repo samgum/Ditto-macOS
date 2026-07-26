@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto se ejecuta en la barra de menus. %@: %@\n\nPara activar el pegado automatico, concede acceso en Ajustes del Sistema ▸ Privacidad y seguridad ▸ Accesibilidad.",
   "accessibility_granted": "Accesibilidad activada",
   "grant_accessibility": "Conceder accesibilidad…",
-  "backup_success": "Copia de seguridad de la base de datos creada."
+  "backup_success": "Copia de seguridad de la base de datos creada.",
+  "db_health": "Base de datos",
+  "db_health_ok": "Correcta",
+  "db_health_problem": "Requiere atención",
+  "db_health_emergency": "No se pudo abrir la base de datos principal; Ditto está usando la base de emergencia. El archivo original no se modificó.",
+  "db_health_memory_only": "No hay una base de datos con permiso de escritura. El historial solo se guarda en memoria y se perderá al salir de Ditto.",
+  "db_health_write_failed": "No se pudo escribir el último elemento en la base de datos.",
+  "show_in_finder": "Mostrar en el Finder",
+  "quick_backup": "Copia de seguridad ahora",
+  "existing_backups": "Copias de seguridad",
+  "db_size": "Tamaño de la base de datos",
+  "available_space": "Espacio disponible",
+  "db_relocation_verified": "La copia superó la comprobación de integridad.",
+  "db_relocation_rolled_back": "No se movió nada. La base de datos actual no ha cambiado."
 }

@@ -82,9 +82,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
         let monitor = ClipboardMonitor(store: store)
         monitor.onChange = { [weak self] entry in
+            guard let self else { return }
             Statistics.shared.recordCopy()
-            self?.syncCoordinator.broadcast(entry: entry)
-            if DittoSettings.showSaveNotification { SaveNotifier.shared.show(entry.preview) }
+            self.syncCoordinator.broadcast(entry: entry)
+            // Never confirm a save the database didn't accept.
+            if self.store.health.isHealthy == false {
+                SaveNotifier.shared.showWarning(self.storageHealthMessage)
+            } else if DittoSettings.showSaveNotification {
+                SaveNotifier.shared.show(entry.preview)
+            }
             if DittoSettings.showSaveAnimation { SaveAnimation.shared.animate() }
         }
         monitor.start()
@@ -448,19 +454,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
         panel.nameFieldStringValue = "Ditto-Backup-\(Int(Date().timeIntervalSince1970)).db"
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                try self?.store.backupDatabase(to: url)
-                self?.showAlert(message: LocalizationManager.shared.text("export_success"))
-            } catch {
-                self?.showAlert(message: LocalizationManager.shared.text("operation_failed"))
-            }
+            guard response == .OK, let url = panel.url, let self else { return }
+            // A backup copies the whole database; never on the main thread.
+            self.runDatabaseTask(
+                work: { try self.store.backupDatabase(to: url) },
+                successMessage: LocalizationManager.shared.text("backup_success")
+            )
         }
     }
 
+    /// One-click backup into the Backups folder next to the database.
+    @objc func quickBackupDatabase() {
+        runDatabaseTask(
+            work: { [weak self] in
+                guard let self else { return }
+                let url = try self.store.createTimestampedBackup()
+                DispatchQueue.main.async { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            },
+            successMessage: LocalizationManager.shared.text("backup_success")
+        )
+    }
+
     @objc func compactDatabase() {
-        store.compactDatabase()
-        showAlert(message: LocalizationManager.shared.text("compact_done"))
+        runDatabaseTask(
+            work: { [weak self] in try self?.store.compactDatabase() },
+            successMessage: LocalizationManager.shared.text("compact_done")
+        )
+    }
+
+    @objc func revealDatabaseInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([store.databaseFileURL])
+    }
+
+    /// Runs a potentially slow database operation off the main thread and
+    /// reports the outcome — including the underlying error text, so a failure
+    /// is actionable instead of a bare "Operation failed."
+    private func runDatabaseTask(work: @escaping () throws -> Void, successMessage: String) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var message = successMessage
+            do {
+                try work()
+            } catch {
+                message = LocalizationManager.shared.text("operation_failed")
+                    + "\n" + ClipboardStore.describe(error)
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.showAlert(message: message)
+            }
+        }
     }
 
     @objc func showAbout() {
@@ -735,9 +776,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         // Database maintenance submenu
         let dbItem = NSMenuItem(title: LocalizationManager.shared.text("database"), action: nil, keyEquivalent: "")
         let dbSubmenu = NSMenu()
+
+        // Health first: a database that isn't accepting writes has to be
+        // visible without opening any window.
+        let healthItem = NSMenuItem(title: storageHealthMenuTitle, action: nil, keyEquivalent: "")
+        healthItem.isEnabled = false
+        healthItem.toolTip = storageHealthMessage
+        dbSubmenu.addItem(healthItem)
+        let pathItem = NSMenuItem(
+            title: LocalizationManager.shared.text("show_in_finder"),
+            action: #selector(revealDatabaseInFinder),
+            keyEquivalent: ""
+        )
+        pathItem.target = self
+        pathItem.toolTip = store.databaseFileURL.path
+        dbSubmenu.addItem(pathItem)
+        dbSubmenu.addItem(.separator())
+
+        let quickBackupItem = NSMenuItem(title: LocalizationManager.shared.text("quick_backup"), action: #selector(quickBackupDatabase), keyEquivalent: "")
+        quickBackupItem.target = self
+        quickBackupItem.toolTip = store.backupsDirectory.path
+        dbSubmenu.addItem(quickBackupItem)
         let backupItem = NSMenuItem(title: LocalizationManager.shared.text("backup_database"), action: #selector(backupDatabase), keyEquivalent: "")
         backupItem.target = self
         dbSubmenu.addItem(backupItem)
+
+        // Existing backups, so restoring doesn't mean hunting through Finder.
+        let backups = store.existingBackups()
+        if backups.isEmpty == false {
+            let backupsItem = NSMenuItem(title: LocalizationManager.shared.text("existing_backups"), action: nil, keyEquivalent: "")
+            let backupsSubmenu = NSMenu()
+            for backup in backups.prefix(15) {
+                let title = "\(dateFormatter.string(from: backup.date))  "
+                    + ByteCountFormatter.string(fromByteCount: backup.size, countStyle: .file)
+                let item = NSMenuItem(title: title, action: #selector(revealBackupInFinder(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = backup.url
+                item.toolTip = backup.url.path
+                backupsSubmenu.addItem(item)
+            }
+            backupsItem.submenu = backupsSubmenu
+            dbSubmenu.addItem(backupsItem)
+        }
+
         let compactItem = NSMenuItem(title: LocalizationManager.shared.text("compact_database"), action: #selector(compactDatabase), keyEquivalent: "")
         compactItem.target = self
         dbSubmenu.addItem(compactItem)
@@ -766,6 +847,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         menu.addItem(.separator())
         addItem(menu, title: LocalizationManager.shared.text("about"), action: #selector(showAbout), key: "")
         addItem(menu, title: LocalizationManager.shared.text("quit"), action: #selector(quit), key: "q")
+    }
+
+    @objc private func revealBackupInFinder(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    /// One-line status for the menu bar; the full explanation is the tooltip.
+    private var storageHealthMenuTitle: String {
+        let label = LocalizationManager.shared.text("db_health")
+        switch store.health {
+        case .healthy:
+            return "✓ \(label): \(LocalizationManager.shared.text("db_health_ok"))"
+        case .usingEmergencyDatabase, .memoryOnly, .writeFailed:
+            return "⚠ \(label): \(LocalizationManager.shared.text("db_health_problem"))"
+        }
+    }
+
+    var storageHealthMessage: String {
+        switch store.health {
+        case .healthy:
+            return LocalizationManager.shared.text("db_health_ok")
+        case .usingEmergencyDatabase(let reason):
+            return LocalizationManager.shared.text("db_health_emergency") + "\n" + reason
+        case .memoryOnly(let reason):
+            return LocalizationManager.shared.text("db_health_memory_only") + "\n" + reason
+        case .writeFailed(let reason):
+            return LocalizationManager.shared.text("db_health_write_failed") + "\n" + reason
+        }
     }
 
     @objc private func openLatestRelease() {

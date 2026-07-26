@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto lauft in der Menuleiste. %@: %@\n\nUm automatisches Einfugen zu aktivieren, erteilen Sie Zugriff unter Systemeinstellungen ▸ Datenschutz und Sicherheit ▸ Bedienungshilfen.",
   "accessibility_granted": "Bedienungshilfen aktiviert",
   "grant_accessibility": "Bedienungshilfen erlauben…",
-  "backup_success": "Datenbanksicherung erstellt."
+  "backup_success": "Datenbanksicherung erstellt.",
+  "db_health": "Datenbank",
+  "db_health_ok": "In Ordnung",
+  "db_health_problem": "Prüfen",
+  "db_health_emergency": "Die Hauptdatenbank ließ sich nicht öffnen; Ditto verwendet die Notfalldatenbank. Die Originaldatei blieb unverändert.",
+  "db_health_memory_only": "Keine beschreibbare Datenbank. Der Verlauf liegt nur im Arbeitsspeicher und geht beim Beenden von Ditto verloren.",
+  "db_health_write_failed": "Der letzte Eintrag konnte nicht in die Datenbank geschrieben werden.",
+  "show_in_finder": "Im Finder zeigen",
+  "quick_backup": "Jetzt sichern",
+  "existing_backups": "Sicherungen",
+  "db_size": "Datenbankgröße",
+  "available_space": "Freier Speicher",
+  "db_relocation_verified": "Die Kopie hat die Integritätsprüfung bestanden.",
+  "db_relocation_rolled_back": "Es wurde nichts verschoben. Die aktuelle Datenbank bleibt unverändert."
 }

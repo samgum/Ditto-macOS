@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto 正在菜单栏中运行。%@: %@\n\n要启用自动粘贴，请在「系统设置 ▸ 隐私与安全性 ▸ 辅助功能」中授予权限。",
   "accessibility_granted": "辅助功能已启用",
   "grant_accessibility": "授予辅助功能权限…",
-  "backup_success": "数据库备份已创建。"
+  "backup_success": "数据库备份已创建。",
+  "db_health": "数据库",
+  "db_health_ok": "正常",
+  "db_health_problem": "需要处理",
+  "db_health_emergency": "无法打开主数据库，Ditto 正在使用应急数据库。原文件未被改动。",
+  "db_health_memory_only": "没有可写入的数据库。剪贴板历史仅保存在内存中，退出 Ditto 后会丢失。",
+  "db_health_write_failed": "最近一条剪贴内容未能写入数据库。",
+  "show_in_finder": "在 Finder 中显示",
+  "quick_backup": "立即备份",
+  "existing_backups": "备份",
+  "db_size": "数据库大小",
+  "available_space": "可用空间",
+  "db_relocation_verified": "副本已通过完整性校验。",
+  "db_relocation_rolled_back": "未移动任何内容，当前数据库保持不变。"
 }

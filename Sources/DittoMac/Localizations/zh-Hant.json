@@ -210,5 +210,18 @@
   "startup_message_format": "Ditto 正在選單列中執行。%@: %@\n\n若要啟用自動貼上，請在「系統設定 ▸ 隱私權與安全性 ▸ 輔助使用」中授予權限。",
   "accessibility_granted": "輔助使用已啟用",
   "grant_accessibility": "授予輔助使用權限…",
-  "backup_success": "資料庫備份已建立。"
+  "backup_success": "資料庫備份已建立。",
+  "db_health": "資料庫",
+  "db_health_ok": "正常",
+  "db_health_problem": "需要處理",
+  "db_health_emergency": "無法開啟主資料庫，Ditto 正在使用緊急資料庫。原檔案未被更動。",
+  "db_health_memory_only": "沒有可寫入的資料庫。剪貼簿記錄僅保存在記憶體中，結束 Ditto 後會遺失。",
+  "db_health_write_failed": "最近一筆剪貼內容未能寫入資料庫。",
+  "show_in_finder": "在 Finder 中顯示",
+  "quick_backup": "立即備份",
+  "existing_backups": "備份",
+  "db_size": "資料庫大小",
+  "available_space": "可用空間",
+  "db_relocation_verified": "副本已通過完整性檢查。",
+  "db_relocation_rolled_back": "未移動任何內容，目前的資料庫保持不變。"
 }
