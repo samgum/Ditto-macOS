@@ -38,12 +38,16 @@ final class MacClipboardDatabase {
             : (SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX)
         guard sqlite3_open_v2(url.path, &database, flags, nil) == SQLITE_OK else {
             let message = database.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? url.path
+            // sqlite3_open_v2 hands back a handle even when it fails; closing it
+            // here keeps a failed open from leaking a connection.
+            sqlite3_close(database)
+            database = nil
             throw MacClipboardDatabaseError.openFailed(message)
         }
 
         try execute("PRAGMA foreign_keys = ON")
+        try execute("PRAGMA busy_timeout = 5000")
         if readOnly == false {
-            try execute("PRAGMA busy_timeout = 5000")
             try execute(useWAL ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE")
             try execute("PRAGMA synchronous = NORMAL")
             try execute("PRAGMA wal_autocheckpoint = 256")
@@ -52,6 +56,28 @@ final class MacClipboardDatabase {
             try migrate()       // ensure every column exists BEFORE indexes
             try createIndexes()
         }
+    }
+
+    /// Last-resort, never-failing in-memory database.
+    ///
+    /// Used only when neither the configured database nor the emergency file
+    /// can be opened. Clipboard history is then volatile, but the app keeps
+    /// running (and reports the degraded state) instead of dying at launch.
+    static func inMemoryFallback() -> MacClipboardDatabase {
+        MacClipboardDatabase(inMemory: ())
+    }
+
+    private init(inMemory: Void) {
+        _ = sqlite3_open_v2(
+            ":memory:",
+            &database,
+            SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
+            nil
+        )
+        _ = try? execute("PRAGMA foreign_keys = ON")
+        try? createTables()
+        try? migrate()
+        try? createIndexes()
     }
 
     deinit {
@@ -193,13 +219,35 @@ final class MacClipboardDatabase {
 
     // MARK: - Entries
 
+    /// Columns `loadEntries` needs, with the literal substituted when a column
+    /// is missing. Read-only opens (archives, quarantined databases from older
+    /// builds) skip `migrate()`, so the schema there can legitimately lag; a
+    /// fixed SELECT would fail with "no such column" and make those databases
+    /// unrecoverable.
+    private static let entrySelectColumns: [(name: String, missingLiteral: String)] = [
+        ("id", "NULL"), ("text", "NULL"), ("rtfBlobKey", "NULL"), ("htmlBlobKey", "NULL"),
+        ("imageBlobKey", "NULL"), ("fileURLsJson", "NULL"), ("createdAt", "0"),
+        ("lastPasteDate", "NULL"), ("isFavorite", "NULL"), ("neverAutoDelete", "0"),
+        ("quickPasteText", "NULL"), ("clipOrder", "0"), ("shortcutKey", "0"),
+        ("shortcutGlobal", "0"), ("moveToGroupShortcut", "0"), ("globalMoveToGroup", "0"),
+        ("crc", "NULL"), ("sourceApp", "NULL"), ("pasteCount", "0"), ("groupId", "NULL"),
+        ("pdfBlobKey", "NULL")
+    ]
+
     func loadEntries() throws -> [ClipboardEntry] {
-        try query(
+        let available = Set(existingColumns(in: "ClipboardEntries"))
+        guard available.contains("id") else {
+            throw MacClipboardDatabaseError.prepareFailed("ClipboardEntries table is missing or unreadable")
+        }
+        let selectList = Self.entrySelectColumns.map { column in
+            available.contains(column.name)
+                ? quoted(column.name)
+                : "\(column.missingLiteral) AS \(quoted(column.name))"
+        }.joined(separator: ", ")
+
+        return try query(
             """
-            SELECT id, text, rtfBlobKey, htmlBlobKey, imageBlobKey, fileURLsJson,
-                   createdAt, lastPasteDate, isFavorite, neverAutoDelete, quickPasteText,
-                   clipOrder, shortcutKey, shortcutGlobal, moveToGroupShortcut, globalMoveToGroup,
-                   crc, sourceApp, pasteCount, groupId, pdfBlobKey
+            SELECT \(selectList)
             FROM ClipboardEntries
             ORDER BY neverAutoDelete DESC, isFavorite DESC, clipOrder DESC, createdAt DESC
             """
@@ -358,18 +406,50 @@ final class MacClipboardDatabase {
             sqlite3_close(destination)
             throw MacClipboardDatabaseError.openFailed(message)
         }
-        defer { sqlite3_close(destination) }
 
         guard let source = database,
               let backup = sqlite3_backup_init(destination, "main", source, "main") else {
             let message = sqlite3_errmsg(destination).map { String(cString: $0) } ?? url.path
+            sqlite3_close(destination)
             throw MacClipboardDatabaseError.executeFailed(message)
         }
-        defer { sqlite3_backup_finish(backup) }
+        let stepResult = sqlite3_backup_step(backup, -1)
+        sqlite3_backup_finish(backup)
+        sqlite3_close(destination)
+        guard stepResult == SQLITE_DONE else {
+            throw MacClipboardDatabaseError.executeFailed("backup failed with SQLite result \(stepResult)")
+        }
 
-        guard sqlite3_backup_step(backup, -1) == SQLITE_DONE else {
-            let message = sqlite3_errmsg(destination).map { String(cString: $0) } ?? url.path
+        try Self.convertToRollbackJournal(at: url)
+    }
+
+    /// The backup API copies the source header verbatim, so a copy of a WAL
+    /// database is itself flagged WAL. Such a file cannot reliably be opened
+    /// read-only — SQLite needs a writable `-shm` — which would leave the copy
+    /// unverifiable and unimportable, and drags two sidecar files around.
+    /// Reopening after the copy makes SQLite read the copied header, so the
+    /// switch to a rollback journal actually rewrites it and the backup becomes
+    /// a single self-contained file.
+    private static func convertToRollbackJournal(at url: URL) throws {
+        var handle: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {
+            let message = handle.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? url.path
+            sqlite3_close(handle)
+            throw MacClipboardDatabaseError.openFailed(message)
+        }
+        let result = sqlite3_exec(handle, "PRAGMA journal_mode = DELETE", nil, nil, nil)
+        let message = sqlite3_errmsg(handle).map { String(cString: $0) } ?? url.path
+        sqlite3_close(handle)
+        guard result == SQLITE_OK else {
             throw MacClipboardDatabaseError.executeFailed(message)
+        }
+        // Switching modes removes the sidecars; clear any the copy left behind
+        // so the backup really is one file.
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = url.path + suffix
+            if FileManager.default.fileExists(atPath: sidecar) {
+                try? FileManager.default.removeItem(atPath: sidecar)
+            }
         }
     }
 
@@ -537,6 +617,21 @@ final class MacClipboardDatabase {
 
     func checkpoint() throws {
         try execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    }
+
+    /// `PRAGMA quick_check` result — "ok" when the database is structurally
+    /// sound. Used to verify a relocated copy before the app adopts it.
+    func quickCheckResult() -> String {
+        let result: String? = try? query("PRAGMA quick_check") { statement in
+            sqlite3_step(statement) == SQLITE_ROW ? Self.string(statement, 0) : nil
+        }
+        return result ?? "unreadable"
+    }
+
+    func entryCount() throws -> Int {
+        try query("SELECT COUNT(*) FROM ClipboardEntries") { statement in
+            sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int64(statement, 0)) : 0
+        }
     }
 
     // MARK: - Copy buffers
