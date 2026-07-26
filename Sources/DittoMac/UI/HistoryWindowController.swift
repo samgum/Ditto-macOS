@@ -63,7 +63,15 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private var keyEventMonitor: Any?
     private var themeObserver: NSObjectProtocol?
     private var historyObserver: NSObjectProtocol?
+    private var storageHealthObserver: NSObjectProtocol?
+    private var visibilityObservers: [NSObjectProtocol] = []
     private var pendingHistoryRefresh: DispatchWorkItem?
+    /// Set when a refresh arrives while the window is hidden or minimised.
+    /// Re-filtering and reloading a table nobody can see is pure battery cost;
+    /// the work is deferred until the window is shown again.
+    private var needsRefreshWhenShown = false
+    private let storageWarningLabel = NSTextField(labelWithString: "")
+    private var storageWarningHeightConstraint: NSLayoutConstraint?
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -78,7 +86,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         self.pasteHandler = pasteHandler
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 552),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -107,6 +115,35 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         ) { [weak self] _ in
             self?.scheduleHistoryRefresh()
         }
+        storageHealthObserver = NotificationCenter.default.addObserver(
+            forName: .dittoStorageHealthChanged,
+            object: store,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateStorageWarning()
+        }
+        // Whenever the window comes back into view — deminiaturised, made key
+        // again, or revealed by a Space switch — apply whatever was deferred
+        // while it was off screen.
+        for name in [
+            NSWindow.didDeminiaturizeNotification,
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didChangeOcclusionStateNotification
+        ] {
+            visibilityObservers.append(
+                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    self?.applyDeferredRefresh()
+                }
+            )
+        }
+    }
+
+    /// Runs the refresh that was skipped while the window was hidden.
+    private func applyDeferredRefresh() {
+        updateStorageWarning()
+        guard needsRefreshWhenShown, isWindowOnScreen else { return }
+        needsRefreshWhenShown = false
+        applySearch()
     }
 
     required init?(coder: NSCoder) { nil }
@@ -115,22 +152,41 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         if let keyEventMonitor { NSEvent.removeMonitor(keyEventMonitor) }
         if let themeObserver { NotificationCenter.default.removeObserver(themeObserver) }
         if let historyObserver { NotificationCenter.default.removeObserver(historyObserver) }
+        if let storageHealthObserver { NotificationCenter.default.removeObserver(storageHealthObserver) }
+        visibilityObservers.forEach(NotificationCenter.default.removeObserver)
         pendingHistoryRefresh?.cancel()
     }
 
-    func refresh() { applySearch() }
+    /// True while the window is actually on screen. Everything expensive —
+    /// filtering, `reloadData`, blob decoding — is gated on this.
+    private var isWindowOnScreen: Bool {
+        guard let window else { return false }
+        return window.isVisible && window.isMiniaturized == false
+    }
+
+    func refresh() {
+        guard isWindowOnScreen else {
+            needsRefreshWhenShown = true
+            return
+        }
+        applySearch()
+    }
 
     private func scheduleHistoryRefresh() {
-        guard let window, window.isVisible, window.isMiniaturized == false else { return }
+        guard isWindowOnScreen else {
+            needsRefreshWhenShown = true
+            return
+        }
         let visibleRows = tableView.rows(in: tableView.visibleRect)
         let keepNewestVisible = filteredEntries.isEmpty || visibleRows.location <= 1
 
         pendingHistoryRefresh?.cancel()
         let refresh = DispatchWorkItem { [weak self] in
-            guard let self,
-                  let window = self.window,
-                  window.isVisible,
-                  window.isMiniaturized == false else { return }
+            guard let self else { return }
+            guard self.isWindowOnScreen else {
+                self.needsRefreshWhenShown = true
+                return
+            }
             self.applySearch()
             if keepNewestVisible, self.filteredEntries.isEmpty == false {
                 self.tableView.scrollRowToVisible(0)
@@ -153,7 +209,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         tableView.tableColumns.first { $0.identifier.rawValue == "clip" }?.title = LocalizationManager.shared.text("clip")
         tableView.tableColumns.first { $0.identifier.rawValue == "type" }?.title = LocalizationManager.shared.text("type")
         tableView.tableColumns.first { $0.identifier.rawValue == "date" }?.title = LocalizationManager.shared.text("date")
-        applySearch()
+        updateStorageWarning()
+        refresh()
     }
 
     // MARK: - Filtering
@@ -1254,6 +1311,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
         emptyStateLabel.isHidden = true
 
+        storageWarningLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        storageWarningLabel.textColor = .systemOrange
+        storageWarningLabel.lineBreakMode = .byTruncatingTail
+        storageWarningLabel.translatesAutoresizingMaskIntoConstraints = false
+        storageWarningLabel.isHidden = true
+
         let toolbar = makeToolbar()
 
         let root = ThemeAwareHistoryRootView { [weak self] in
@@ -1268,6 +1331,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         root.addSubview(previewScroll)
         root.addSubview(toolbar)
         root.addSubview(countLabel)
+        root.addSubview(storageWarningLabel)
         root.addSubview(emptyStateLabel)
         window.contentView = root
 
@@ -1277,6 +1341,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         let scrollViewBottom = scrollView.bottomAnchor.constraint(equalTo: previewScroll.topAnchor, constant: descriptionVisible ? -4 : 0)
         scrollViewBottomToPreviewConstraint = scrollViewBottom
+
+        // Collapses to zero height while the storage is healthy, so the banner
+        // costs no vertical space in the normal case.
+        let storageWarningHeight = storageWarningLabel.heightAnchor.constraint(equalToConstant: 0)
+        storageWarningHeightConstraint = storageWarningHeight
 
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
@@ -1296,7 +1365,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             groupFilterPopup.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             groupFilterPopup.widthAnchor.constraint(equalTo: typeFilterPopup.widthAnchor),
 
-            scrollView.topAnchor.constraint(equalTo: countLabel.bottomAnchor, constant: 4),
+            storageWarningLabel.topAnchor.constraint(equalTo: countLabel.bottomAnchor),
+            storageWarningLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
+            storageWarningLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -12),
+            storageWarningHeight,
+
+            scrollView.topAnchor.constraint(equalTo: storageWarningLabel.bottomAnchor, constant: 4),
             scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             scrollViewBottom,
@@ -1319,6 +1393,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             toolbar.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12)
         ])
+        updateStorageWarning()
         applySearch()
     }
 
@@ -1343,6 +1418,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     /// always-on-top / transparency actually apply on each summon.
     func applyOnShow() {
         applyWindowChrome()
+        // Catch up on anything that changed while the window was hidden.
+        applyDeferredRefresh()
         // Position the window. .atCursor places it near the mouse pointer
         // (Ditto's popup-at-cursor behaviour); .previousPosition keeps the last
         // frame the user left it at.
@@ -1530,7 +1607,36 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         previewPanel.textColor = theme.listBoxText
         countLabel.textColor = theme.captionText
         emptyStateLabel.textColor = theme.captionText
-        tableView.reloadData()
+        // A hidden window has nothing to redraw; reload on the next show.
+        if isWindowOnScreen {
+            tableView.reloadData()
+        } else {
+            needsRefreshWhenShown = true
+        }
+    }
+
+    /// Non-modal storage banner. A database that isn't accepting writes must be
+    /// visible in the window the user is looking at, without a modal alert.
+    private func updateStorageWarning() {
+        let health = store.health
+        let isHealthy = health.isHealthy
+        storageWarningLabel.isHidden = isHealthy
+        storageWarningHeightConstraint?.constant = isHealthy ? 0 : 18
+        guard isHealthy == false else { return }
+        let text: String
+        switch health {
+        case .healthy:
+            text = ""
+        case .usingEmergencyDatabase:
+            text = LocalizationManager.shared.text("db_health_emergency")
+        case .memoryOnly:
+            text = LocalizationManager.shared.text("db_health_memory_only")
+        case .writeFailed:
+            text = LocalizationManager.shared.text("db_health_write_failed")
+        }
+        storageWarningLabel.stringValue = "⚠ " + text
+        storageWarningLabel.toolTip = [text, health.reason].compactMap { $0 }.joined(separator: "\n")
+        storageWarningLabel.setAccessibilityLabel(text)
     }
 }
 
