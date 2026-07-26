@@ -929,13 +929,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     private func showStartupMessageIfNeeded() {
         guard UserDefaults.standard.bool(forKey: startupMessageShownKey) == false else { return }
         UserDefaults.standard.set(true, forKey: startupMessageShownKey)
-        let alert = NSAlert()
-        alert.messageText = LocalizationManager.shared.text("app_name")
-        alert.informativeText = String(
-            format: LocalizationManager.shared.text("startup_message_format"),
-            LocalizationManager.shared.text("hot_key"),
-            HotKeyChoice.currentChoice.title
+        // Deliberately NOT an NSAlert: a modal at launch pulls focus out of
+        // whatever the user is typing in. The transient panel is
+        // non-activating and disappears on its own.
+        SaveNotifier.shared.showTransient(
+            String(
+                format: LocalizationManager.shared.text("startup_message_format"),
+                LocalizationManager.shared.text("hot_key"),
+                HotKeyChoice.currentChoice.title
+            )
         )
-        alert.runModal()
     }
 }
