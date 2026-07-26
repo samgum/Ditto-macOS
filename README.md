@@ -493,13 +493,15 @@ Threading rule:
 ## Architecture
 
 ```text
+Sources/CSystem/
+└── module.modulemap        # system sqlite3 shim
+
 Sources/DittoMac/
+├── main.swift
 ├── App/
-│   ├── main.swift
 │   ├── AppDelegate.swift
 │   ├── SelfTest.swift
-│   ├── LayoutSelfTest.swift
-│   └── SaveAnimation.swift
+│   └── LayoutSelfTest.swift
 ├── Models/
 │   ├── ClipboardEntry.swift
 │   ├── DittoSettings.swift
@@ -515,7 +517,6 @@ Sources/DittoMac/
 │   ├── PasteSimulator.swift
 │   └── ClipboardSaveRestore.swift
 ├── Text/
-│   ├── TextTransforms.swift
 │   ├── SpecialPasteOptions.swift
 │   ├── Slugify.swift
 │   └── SlugifyTransliteration.swift
