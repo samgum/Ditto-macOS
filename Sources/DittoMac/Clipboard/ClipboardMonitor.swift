@@ -41,6 +41,10 @@ final class ClipboardMonitor {
     func stop() {
         timer?.cancel()
         timer = nil
+        // Wait for an in-flight poll to finish. Without this, a capture already
+        // running when the app quits can write to the store *after* the
+        // termination flush has checkpointed, leaving that clip only in the WAL.
+        queue.sync {}
     }
 
     /// Force an immediate capture poll (used after `NSPasteboard.writeObjects`
