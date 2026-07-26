@@ -6,7 +6,7 @@ Ditto for macOS 是一个使用 Swift / AppKit 编写的原生 macOS 剪贴板�
 
 **作者：伤感咩吖**
 
-**当前版本：1.2.4**
+**当前版本：1.2.5**
 
 **许可证：GPL-3.0**
 
@@ -146,7 +146,7 @@ bash scripts/package-dmg.sh
 生成产物：
 
 ```text
-dist/Ditto-macOS-1.2.4.dmg
+dist/Ditto-macOS-1.2.5.dmg
 dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```

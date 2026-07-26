@@ -4,7 +4,7 @@ Author: **伤感咩吖** · A native Swift/AppKit port of [Ditto](https://github
 
 ## Replication status
 
-A headless `--selftest` exercises the pure-logic subsystems (39 assertions). A
+A headless `--selftest` exercises the pure-logic subsystems (83 assertions). A
 multi-agent audit compared the macOS port against the Windows source across 12
 feature areas; the critical gaps it surfaced have been addressed:
 
