@@ -6,7 +6,7 @@ Ditto for macOS 是一个使用 Swift / AppKit 编写的原生 macOS 剪贴板�
 
 **作者：伤感咩吖**
 
-**当前版本：1.2.5**
+**当前版本：1.2.6**
 
 **许可证：GPL-3.0**
 
@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 期望自测结果：
 
 ```text
-83 passed, 0 failed
+84 passed, 0 failed
 ```
 
-自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库持久化与 SQLite 一致性备份/迁移往返（含完整性校验、拒绝覆盖已存在的数据库、迁移失败后清理临时文件）、单文件自包含备份、缺少 -shm 时对 WAL 数据库的恢复、置顶记录位于列表顶部时的捕获去重、重叠导入时共享 blob 的保留、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
+自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库持久化与 SQLite 一致性备份/迁移往返（含完整性校验、拒绝覆盖已存在的数据库、迁移失败后清理临时文件）、单文件自包含备份、缺少 -shm 时对 WAL 数据库的恢复、拒绝缺失附件的损坏归档、置顶记录位于列表顶部时的捕获去重、重叠导入时共享 blob 的保留、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
 
 运行界面布局检查（需要桌面会话，CI 中不执行）：
 
@@ -164,7 +164,7 @@ bash scripts/package-dmg.sh
 生成产物：
 
 ```text
-dist/Ditto-macOS-1.2.5.dmg
+dist/Ditto-macOS-1.2.6.dmg
 dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```

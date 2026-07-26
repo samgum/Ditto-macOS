@@ -6,7 +6,7 @@ Ditto for macOS is a native Swift/AppKit clipboard manager for macOS 13 and late
 
 **Author: 伤感咩吖**
 
-**Current version: 1.2.5**
+**Current version: 1.2.6**
 
 **License: GPL-3.0**
 
@@ -129,10 +129,10 @@ swift run DittoMac --selftest
 Expected self-test result:
 
 ```text
-83 passed, 0 failed
+84 passed, 0 failed
 ```
 
-The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database persistence and SQLite-consistent backup/relocation round trips (including integrity verification, refusal to overwrite an existing database, and staging cleanup after a failed relocation), self-contained single-file backups, recovery of WAL-mode databases whose sidecars are missing, capture de-duplication with a pinned clip on top, shared-blob retention across an overlapping import, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
+The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database persistence and SQLite-consistent backup/relocation round trips (including integrity verification, refusal to overwrite an existing database, and staging cleanup after a failed relocation), self-contained single-file backups, recovery of WAL-mode databases whose sidecars are missing, rejection of archives with missing attachments, capture de-duplication with a pinned clip on top, shared-blob retention across an overlapping import, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
 
 Run the GUI layout check (needs a desktop session; not run in CI):
 
@@ -165,7 +165,7 @@ bash scripts/package-dmg.sh
 Generated outputs:
 
 ```text
-dist/Ditto-macOS-1.2.5.dmg
+dist/Ditto-macOS-1.2.6.dmg
 dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```
