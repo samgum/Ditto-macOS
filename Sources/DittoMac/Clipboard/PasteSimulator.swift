@@ -10,16 +10,6 @@ import Foundation
 /// Accessibility permission (System Settings ▸ Privacy & Security ▸
 /// Accessibility).
 enum PasteSimulator {
-    static func paste(afterDelay seconds: TimeInterval = 0.12) {
-        let front = NSWorkspace.shared.frontmostApplication
-        if front?.isActive == false {
-            front?.activate(options: [.activateIgnoringOtherApps])
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
-            postCommandV()
-        }
-    }
-
     /// Activate a specific app and paste into it. Non-blocking: the activate
     /// happens on the main thread (AppKit requirement) and the wait + keystroke
     /// happen on a background queue so the UI never freezes.

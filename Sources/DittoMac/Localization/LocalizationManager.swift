@@ -45,23 +45,49 @@ final class LocalizationManager {
     }
 
     private func loadLanguage(_ code: String) {
-        for bundle in candidateBundles() {
-            if let url = bundle.url(forResource: code, withExtension: "json", subdirectory: "Localizations")
-                ?? bundle.url(forResource: code, withExtension: "json") {
-                if let data = try? Data(contentsOf: url),
-                   let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
-                    strings = decoded
-                    return
-                }
-            }
+        if let url = localizationURL(for: code),
+           let data = try? Data(contentsOf: url),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            strings = decoded
+            return
         }
         strings = Self.fallbackStrings
     }
 
+    func localizationURL(for code: String) -> URL? {
+        for bundle in candidateBundles() {
+            if let url = bundle.url(forResource: code, withExtension: "json", subdirectory: "Localizations")
+                ?? bundle.url(forResource: code, withExtension: "json") {
+                return url
+            }
+        }
+        return nil
+    }
+
     private func candidateBundles() -> [Bundle] {
-        var bundles: [Bundle] = [Bundle.module]
-        if let module = Bundle(url: Bundle.main.bundleURL) { bundles.append(module) }
-        bundles.append(Bundle.main)
+        let moduleBundleName = "DittoMac_DittoMac.bundle"
+        var bundles: [Bundle] = [Bundle.main]
+        var moduleURLs = [
+            Bundle.main.bundleURL.appendingPathComponent(moduleBundleName)
+        ]
+
+        if let resourceURL = Bundle.main.resourceURL {
+            moduleURLs.append(resourceURL.appendingPathComponent(moduleBundleName))
+        }
+        if let executableURL = Bundle.main.executableURL {
+            moduleURLs.append(
+                executableURL
+                    .deletingLastPathComponent()
+                    .appendingPathComponent(moduleBundleName)
+            )
+        }
+
+        var seenPaths = Set([Bundle.main.bundleURL.standardizedFileURL.path])
+        for url in moduleURLs {
+            let path = url.standardizedFileURL.path
+            guard seenPaths.insert(path).inserted, let bundle = Bundle(url: url) else { continue }
+            bundles.append(bundle)
+        }
         return bundles
     }
 

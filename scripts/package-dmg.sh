@@ -71,7 +71,29 @@ echo "    signature:"
 codesign -dv "$APP_BUNDLE" 2>&1 | sed 's/^/    /' || true
 
 echo "==> Verifying packaged app resources"
-"$APP_BUNDLE/Contents/MacOS/$EXEC_NAME" --selftest
+PACKAGED_LOCALIZATION="$APP_BUNDLE/Contents/Resources/$(basename "$RESOURCE_BUNDLE")/Localizations/en.json"
+if [[ ! -f "$PACKAGED_LOCALIZATION" ]]; then
+  echo "Packaged app is missing $PACKAGED_LOCALIZATION" >&2
+  exit 1
+fi
+
+# Hide the build-tree resource bundle while testing. SwiftPM embeds its
+# absolute build path as a fallback, which previously let a broken .app pass.
+HIDDEN_RESOURCE_BUNDLE="${RESOURCE_BUNDLE}.package-validation"
+restore_build_resource_bundle() {
+  if [[ -d "$HIDDEN_RESOURCE_BUNDLE" && ! -e "$RESOURCE_BUNDLE" ]]; then
+    mv "$HIDDEN_RESOURCE_BUNDLE" "$RESOURCE_BUNDLE"
+  fi
+}
+trap restore_build_resource_bundle EXIT
+rm -rf "$HIDDEN_RESOURCE_BUNDLE"
+mv "$RESOURCE_BUNDLE" "$HIDDEN_RESOURCE_BUNDLE"
+(
+  cd /
+  "$APP_BUNDLE/Contents/MacOS/$EXEC_NAME" --selftest
+)
+restore_build_resource_bundle
+trap - EXIT
 
 echo "==> Staging DMG contents (Ditto.app + /Applications link)"
 ln -s /Applications "$STAGE_DIR/Applications"

@@ -267,6 +267,14 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         if identifier.rawValue == "date" {
             let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView ?? NSTableCellView()
             configureLabelCell(cell, text: dateFormatter.string(from: entry.createdAt))
+            let lastUsed = entry.lastPasteDate.map(dateFormatter.string(from:))
+                ?? LocalizationManager.shared.text("never")
+            let tooltip = [
+                "\(LocalizationManager.shared.text("date")): \(dateFormatter.string(from: entry.createdAt))",
+                "\(LocalizationManager.shared.text("last_pasted")): \(lastUsed)"
+            ].joined(separator: "\n")
+            cell.toolTip = tooltip
+            cell.textField?.toolTip = tooltip
             return cell
         }
 
@@ -1184,12 +1192,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         let typeColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("type"))
         typeColumn.title = LocalizationManager.shared.text("type")
-        typeColumn.width = 70
+        typeColumn.width = 64
         tableView.addTableColumn(typeColumn)
 
         let dateColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("date"))
         dateColumn.title = LocalizationManager.shared.text("date")
-        dateColumn.width = 130
+        dateColumn.width = 112
         tableView.addTableColumn(dateColumn)
 
         scrollView.documentView = tableView

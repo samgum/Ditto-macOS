@@ -12,8 +12,9 @@ final class ClipboardStore {
     let databaseFileURL: URL
     private(set) var entries: [ClipboardEntry] = []
     private(set) var groups: [ClipGroup] = []
+    private var persistedEntriesByID: [UUID: ClipboardEntry] = [:]
 
-    private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.store", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "org.ditto-cp.DittoMac.store", qos: .utility)
 
     /// Serializes ALL access to `entries` / `groups`. The in-memory arrays are
     /// mutated on background threads (clipboard poll queue, sync queue) while
@@ -41,6 +42,7 @@ final class ClipboardStore {
         legacyFileURL = directory.appendingPathComponent("history.json")
         legacyDataDirectory = directory.appendingPathComponent("Data", isDirectory: true)
         let defaultURL = directory.appendingPathComponent("Ditto.db")
+        let emergencyURL = directory.appendingPathComponent("Ditto-emergency.db")
         let requestedURL = databaseURL ?? DittoSettings.databaseURL ?? defaultURL
         do {
             database = try MacClipboardDatabase(url: requestedURL)
@@ -48,14 +50,17 @@ final class ClipboardStore {
         } catch {
             // A failed open can be transient (permissions, a stale lock, or an
             // interrupted migration). Never rename the user's only database.
-            let fallbackURL = directory.appendingPathComponent("Ditto-recovery-\(Int(Date().timeIntervalSince1970)).db")
-            NSLog("[Ditto] failed to open \(requestedURL.path): \(error). The original file was left untouched; using \(fallbackURL.lastPathComponent).")
-            database = try! MacClipboardDatabase(url: fallbackURL)
-            databaseFileURL = fallbackURL
+            NSLog("[Ditto] failed to open \(requestedURL.path): \(error). The original file was left untouched; using \(emergencyURL.lastPathComponent).")
+            database = try! MacClipboardDatabase(url: emergencyURL)
+            databaseFileURL = emergencyURL
         }
         load()
-        if requestedURL.standardizedFileURL == defaultURL.standardizedFileURL {
-            recoverQuarantinedDatabases(in: directory)
+        if databaseFileURL.standardizedFileURL != emergencyURL.standardizedFileURL {
+            recoverDatabases(
+                in: directory,
+                emergencyURL: emergencyURL,
+                includeQuarantines: requestedURL.standardizedFileURL == defaultURL.standardizedFileURL
+            )
         }
         migrateLegacyJSONIfNeeded()
         enforceExpiry()
@@ -555,7 +560,14 @@ final class ClipboardStore {
         lock.lock(); defer { lock.unlock() }
         entries.removeAll()
         groups.removeAll()
-        try? database.removeAll()
+        queue.sync {
+            do {
+                try database.removeAll()
+                persistedEntriesByID.removeAll()
+            } catch {
+                NSLog("[Ditto] failed to clear clipboard database: \(error)")
+            }
+        }
     }
 
     func enforceLimit() {
@@ -591,11 +603,22 @@ final class ClipboardStore {
     /// Waits for all queued history writes. Call this before app termination
     /// and before creating a database relocation copy.
     func flush() {
+        persist()
         queue.sync {}
+        do {
+            try database.checkpoint()
+        } catch {
+            NSLog("[Ditto] failed to checkpoint clipboard database: \(error)")
+        }
     }
 
     func compactDatabase() {
-        try? database.vacuum()
+        flush()
+        do {
+            try database.vacuum()
+        } catch {
+            NSLog("[Ditto] failed to compact clipboard database: \(error)")
+        }
     }
 
     /// Delete clips that have never been pasted and aren't pinned.
@@ -719,39 +742,51 @@ final class ClipboardStore {
     }
 
     private func load() {
-        if let loadedEntries = try? database.loadEntries() {
+        do {
+            let loadedEntries = try database.loadEntries()
             entries = loadedEntries
+            persistedEntriesByID = Dictionary(uniqueKeysWithValues: loadedEntries.map { ($0.id, $0) })
+        } catch {
+            NSLog("[Ditto] failed to load clipboard entries: \(error)")
         }
-        if let loadedGroups = try? database.loadGroups() {
+        do {
+            let loadedGroups = try database.loadGroups()
             groups = loadedGroups.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        } catch {
+            NSLog("[Ditto] failed to load clipboard groups: \(error)")
         }
     }
 
     private func persist() {
-        // Snapshot under the lock so the background write is consistent and
-        // can't race a concurrent mutation.
         lock.lock()
-        let snapshot = entries
-        let snapshotGroups = groups
+        let snapshotByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
         lock.unlock()
-        queue.async { [database] in
+
+        queue.sync {
+            let changedEntries = snapshotByID.values.filter {
+                self.persistedEntriesByID[$0.id] != $0
+            }
+            let deletedIDs = self.persistedEntriesByID.keys.filter {
+                snapshotByID[$0] == nil
+            }
+            guard changedEntries.isEmpty == false || deletedIDs.isEmpty == false else { return }
             do {
-                try database.replaceEntries(snapshot)
+                try self.database.applyEntryChanges(
+                    upserting: changedEntries,
+                    deleting: deletedIDs
+                )
+                self.persistedEntriesByID = snapshotByID
             } catch {
                 NSLog("[Ditto] failed to persist clipboard entries: \(error)")
-                return
-            }
-            for group in snapshotGroups {
-                do {
-                    try database.updateGroup(group)
-                } catch {
-                    NSLog("[Ditto] failed to persist group \(group.id): \(error)")
-                }
             }
         }
     }
 
-    private func recoverQuarantinedDatabases(in directory: URL) {
+    private func recoverDatabases(
+        in directory: URL,
+        emergencyURL: URL,
+        includeQuarantines: Bool
+    ) {
         let manager = FileManager.default
         let previouslyRecovered = Set(UserDefaults.standard.stringArray(forKey: Self.recoveredQuarantinesKey) ?? [])
         guard let urls = try? manager.contentsOfDirectory(
@@ -762,7 +797,15 @@ final class ClipboardStore {
 
         var recovered = previouslyRecovered
         var recoveredEntries = 0
-        for url in urls where url.lastPathComponent.hasPrefix("Ditto.corrupt-") && url.pathExtension == "db" {
+        for url in urls {
+            let isEmergency = url.standardizedFileURL == emergencyURL.standardizedFileURL
+            let isQuarantine = includeQuarantines
+                && url.pathExtension == "db"
+                && (
+                    url.lastPathComponent.hasPrefix("Ditto.corrupt-")
+                    || url.lastPathComponent.hasPrefix("Ditto-recovery-")
+                )
+            guard isEmergency || isQuarantine else { continue }
             let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
             let marker = "\(url.path)|\(values?.fileSize ?? 0)|\(values?.contentModificationDate?.timeIntervalSince1970 ?? 0)"
             guard recovered.contains(marker) == false else { continue }

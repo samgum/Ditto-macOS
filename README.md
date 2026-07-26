@@ -6,7 +6,7 @@ Ditto for macOS is a native Swift/AppKit clipboard manager for macOS 13 and late
 
 **Author: 伤感咩吖**
 
-**Current version: 1.2.2**
+**Current version: 1.2.3**
 
 **License: GPL-3.0**
 
@@ -129,7 +129,7 @@ swift run DittoMac --selftest
 Expected self-test result:
 
 ```text
-68 passed, 0 failed
+71 passed, 0 failed
 ```
 
 The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database persistence and SQLite-consistent backup/relocation round trips, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
@@ -146,7 +146,7 @@ bash scripts/package-dmg.sh
 Generated outputs:
 
 ```text
-dist/Ditto-macOS-1.2.2.dmg
+dist/Ditto-macOS-1.2.3.dmg
 dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```
@@ -394,6 +394,14 @@ that folder; restart Ditto to switch to it. Ditto never overwrites an existing
 `Ditto.db` in the chosen folder, and the original database is retained until you
 verify the new location.
 
+Each clip stores its original save time and most recent paste time. Normal edits
+use incremental SQLite transactions instead of rewriting the full history, and
+WAL checkpoints keep temporary journal growth bounded. If the selected database
+cannot be opened, Ditto keeps new clips in the stable
+`~/Library/Application Support/Ditto/Ditto-emergency.db` database instead of
+creating a different temporary database after every restart. Once the selected
+database is available again, Ditto safely imports the emergency history.
+
 Legacy JSON migration source:
 
 ```text
@@ -412,6 +420,10 @@ Login item:
 ```text
 ~/Library/LaunchAgents/org.ditto-cp.DittoMac.plist
 ```
+
+The login item starts Ditto once at login. It does not use a crash-restart
+watchdog, so a broken build cannot enter a relaunch loop or repeatedly steal
+focus.
 
 ## Development
 

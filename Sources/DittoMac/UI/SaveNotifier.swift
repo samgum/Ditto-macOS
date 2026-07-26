@@ -13,6 +13,10 @@ final class SaveNotifier {
 
     func show(_ preview: String) {
         guard DittoSettings.showSaveNotification else { return }
+        showTransient(preview)
+    }
+
+    func showTransient(_ preview: String) {
         DispatchQueue.main.async { [weak self] in
             self?.present(preview)
         }
@@ -29,6 +33,7 @@ final class SaveNotifier {
                 defer: false
             )
             panel.isFloatingPanel = true
+            panel.becomesKeyOnlyIfNeeded = true
             panel.backgroundColor = NSColor.windowBackgroundColor
             panel.hasShadow = true
             panel.isMovable = false
@@ -57,7 +62,7 @@ final class SaveNotifier {
             let frame = screen.visibleFrame
             panel?.setFrame(NSRect(x: frame.maxX - 300, y: frame.maxY - 56, width: 280, height: 44), display: true)
         }
-        panel?.orderFrontRegardless()
+        panel?.orderFront(nil)
 
         let workItem = DispatchWorkItem { [weak self] in
             self?.dismiss()

@@ -193,13 +193,33 @@ enum SelfTest {
                 throw MacClipboardDatabaseError.executeFailed("Persistent test clip was not captured")
             }
             source.flush()
+            let walURL = URL(fileURLWithPath: sourceURL.path + "-wal")
+            let walSize = (try? walURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            check("database checkpoint keeps WAL bounded", walSize < 1_048_576)
+
             let reopened = ClipboardStore(databaseURL: sourceURL)
             check("clipboard store persists before restart", reopened.entry(id: entry.id)?.text == "persist across restart")
+
+            source.markPasted(entry)
+            source.flush()
+            let timestamped = ClipboardStore(databaseURL: sourceURL).entry(id: entry.id)
+            check(
+                "database preserves saved and last-used timestamps",
+                timestamped.map {
+                    abs($0.createdAt.timeIntervalSince(entry.createdAt)) < 0.001
+                        && $0.lastPasteDate != nil
+                } ?? false
+            )
 
             let destinationDirectory = tempDir.appendingPathComponent("relocated-history", isDirectory: true)
             let destinationURL = try source.prepareDatabaseRelocation(to: destinationDirectory)
             let relocated = ClipboardStore(databaseURL: destinationURL)
             check("database relocation preserves history", relocated.entry(id: entry.id)?.text == "persist across restart")
+
+            source.removeEntry(id: entry.id)
+            source.flush()
+            let afterDeletion = ClipboardStore(databaseURL: sourceURL)
+            check("incremental deletion persists across restart", afterDeletion.entry(id: entry.id) == nil)
         } catch {
             check("clipboard store persistence", false)
         }
@@ -368,7 +388,7 @@ enum SelfTest {
             "grant_accessibility", "backup_success"
         ]
         let localizedResourcesAreComplete = LocalizationManager.shared.languages.allSatisfy { language in
-            guard let url = Bundle.module.url(forResource: language.code, withExtension: "json", subdirectory: "Localizations"),
+            guard let url = LocalizationManager.shared.localizationURL(for: language.code),
                   let data = try? Data(contentsOf: url),
                   let strings = try? JSONDecoder().decode([String: String].self, from: data) else {
                 return false

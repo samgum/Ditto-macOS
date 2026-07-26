@@ -6,7 +6,7 @@ Ditto for macOS 是一个使用 Swift / AppKit 编写的原生 macOS 剪贴板�
 
 **作者：伤感咩吖**
 
-**当前版本：1.2.2**
+**当前版本：1.2.3**
 
 **许可证：GPL-3.0**
 
@@ -129,7 +129,7 @@ swift run DittoMac --selftest
 期望自测结果：
 
 ```text
-68 passed, 0 failed
+71 passed, 0 failed
 ```
 
 自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库持久化与 SQLite 一致性备份/迁移往返、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
@@ -146,7 +146,7 @@ bash scripts/package-dmg.sh
 生成产物：
 
 ```text
-dist/Ditto-macOS-1.2.2.dmg
+dist/Ditto-macOS-1.2.3.dmg
 dist/Ditto-macOS.dmg
 .build/stage/Ditto.app
 ```
@@ -390,6 +390,8 @@ Windows 点对点网络协议集成与数据库导入是不同功能，目前仍
 
 首次启动时会自动创建数据库。可在偏好设置的“数据库位置”中选择一个文件夹，Ditto 会先将当前历史完整复制为该文件夹中的 `Ditto.db`，重启后再切换到新位置。若目标文件夹已存在 `Ditto.db`，Ditto 不会覆盖它；旧数据库也会保留，直到你确认新位置的数据完整无误。
 
+每条剪贴记录都会保存首次保存时间与最近一次粘贴时间。普通修改使用 SQLite 增量事务，不再整表重写；WAL 检查点会限制临时日志持续增长。如果选定数据库无法打开，Ditto 会把新记录持续写入固定的 `~/Library/Application Support/Ditto/Ditto-emergency.db`，不会在每次重启后新建不同的临时数据库。原数据库恢复可用后，Ditto 会安全导入应急历史。
+
 旧 JSON 迁移来源：
 
 ```text
@@ -408,6 +410,8 @@ Windows 点对点网络协议集成与数据库导入是不同功能，目前仍
 ```text
 ~/Library/LaunchAgents/org.ditto-cp.DittoMac.plist
 ```
+
+登录项只在用户登录时启动一次 Ditto，不再使用崩溃自动重启守护，因此损坏版本不会进入循环拉起，也不会反复抢占焦点。
 
 ## 开发说明
 

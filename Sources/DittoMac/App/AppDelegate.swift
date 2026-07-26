@@ -4,10 +4,10 @@ import Foundation
 import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, HistoryWindowDelegate {
-    private let store = ClipboardStore()
     private let loginAgentManager = LoginAgentManager()
     private let activeAppTracker = ActiveAppTracker.shared
-    private let copyBufferManager: CopyBufferManager
+    private lazy var store = ClipboardStore()
+    private lazy var copyBufferManager = CopyBufferManager(store: store)
     private var monitor: ClipboardMonitor?
     private var hotKeyController: HotKeyController?
     private var statusItem: NSStatusItem?
@@ -32,14 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     private var mainHotKeyId: UInt32?
     private var perClipHotKeyIds: [UInt32: UUID] = [:]
     private var firstTenHotKeyIds: [UInt32: Int] = [:]
-
-    override init() {
-        copyBufferManager = CopyBufferManager(store: store)
-        super.init()
-    }
+    private var availableUpdateTag: String?
+    private var servicesStarted = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if DittoSettings.checkForUpdates { checkForUpdates() }
         Self.log("launch begin; pid=\(ProcessInfo.processInfo.processIdentifier); bundle=\(Bundle.main.bundleIdentifier ?? "nil")")
 
         // Single-instance guard via advisory file lock — bulletproof across
@@ -59,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             return
         }
 
+        servicesStarted = true
         NSApp.setActivationPolicy(.accessory)
         Self.log("activationPolicy set")
         ProcessInfo.processInfo.disableAutomaticTermination("Ditto monitors the clipboard from the menu bar.")
@@ -78,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         Self.log("hotkeys registered")
         configureStatusItem()
         Self.log("status item configured")
+        if DittoSettings.checkForUpdates { checkForUpdates() }
         activeAppTracker.start()
         loginAgentManager.installOrRefresh()
         Self.log("login agent installed")
@@ -85,8 +83,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let monitor = ClipboardMonitor(store: store)
         monitor.onChange = { [weak self] entry in
             Statistics.shared.recordCopy()
-            self?.historyWindowController?.refresh()
-            self?.rebuildStatusMenuIfNeeded()
+            if self?.historyWindowController?.window?.isVisible == true {
+                self?.historyWindowController?.refresh()
+            }
             self?.syncCoordinator.broadcast(entry: entry)
             if DittoSettings.showSaveNotification { SaveNotifier.shared.show(entry.preview) }
             if DittoSettings.showSaveAnimation { SaveAnimation.shared.animate() }
@@ -94,7 +93,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         monitor.start()
         self.monitor = monitor
 
-        store.enforceExpiry()
         registerNotifications()
         registerPowerHandling()
         startSync()
@@ -115,7 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         monitor?.stop()
         activeAppTracker.stop()
         syncCoordinator.stop()
-        store.flush()
+        if servicesStarted {
+            store.flush()
+        }
         if let backgroundActivity {
             ProcessInfo.processInfo.endActivity(backgroundActivity)
             self.backgroundActivity = nil
@@ -166,20 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
             if remote.compare(current, options: .numeric) == .orderedDescending {
                 DispatchQueue.main.async {
-                    let alert = NSAlert()
-                    alert.messageText = String(
-                        format: LocalizationManager.shared.text("update_available_format"),
-                        tagName
-                    )
-                    alert.informativeText = String(
-                        format: LocalizationManager.shared.text("update_message_format"),
-                        current
-                    )
-                    alert.addButton(withTitle: LocalizationManager.shared.text("download"))
-                    alert.addButton(withTitle: LocalizationManager.shared.text("later"))
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        NSWorkspace.shared.open(URL(string: "https://github.com/samgum/Ditto-macOS/releases/latest")!)
-                    }
+                    self.availableUpdateTag = tagName
                 }
             }
         }.resume()
@@ -228,11 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         guard let bundleId = Bundle.main.bundleIdentifier else { return false }
         let selfPID = ProcessInfo.processInfo.processIdentifier
         let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-        for app in apps where app.processIdentifier != selfPID {
-            app.activate(options: [.activateIgnoringOtherApps])
-            return true
-        }
-        return false
+        return apps.contains { $0.processIdentifier != selfPID }
     }
 
     // MARK: - Theme
@@ -270,14 +253,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     private func handleReceivedClip(_ notification: Notification) {
-        historyWindowController?.refresh()
-        rebuildStatusMenuIfNeeded()
+        if historyWindowController?.window?.isVisible == true {
+            historyWindowController?.refresh()
+        }
         guard DittoSettings.showReceivedClipNotification,
               notification.userInfo?["manualSend"] as? Bool == true,
               let sender = notification.userInfo?["sender"] as? String else { return }
-        let alert = NSAlert()
-        alert.messageText = LocalizationManager.shared.text("clip_received") + " " + sender
-        alert.runModal()
+        SaveNotifier.shared.showTransient(
+            LocalizationManager.shared.text("clip_received") + " " + sender
+        )
     }
 
     // MARK: - Hot keys
@@ -629,14 +613,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     // MARK: - Quit
 
     @objc func quit() {
-        loginAgentManager.disable()
         NSApp.terminate(nil)
     }
 
     // MARK: - Status item
 
     private func configureStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
             if let image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Ditto") {
                 image.isTemplate = true
@@ -684,18 +667,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         copyBufferManager.captureCurrentClipboard(into: slot.intValue)
     }
 
-    private func rebuildStatusMenuIfNeeded() {
-        guard let statusMenu, statusMenu.items.count > 0 else { return }
-        // Only rebuild if currently showing recent items section.
-        rebuildStatusMenu(statusMenu)
-    }
-
     private func rebuildStatusMenu(_ menu: NSMenu) {
         menu.removeAllItems()
 
         addItem(menu, title: LocalizationManager.shared.text("show_history"), action: #selector(showHistory), key: "")
         addItem(menu, title: LocalizationManager.shared.text("preferences"), action: #selector(showPreferences), key: ",")
         addItem(menu, title: LocalizationManager.shared.text("statistics"), action: #selector(showStatistics), key: "")
+        if let availableUpdateTag {
+            addItem(
+                menu,
+                title: String(
+                    format: LocalizationManager.shared.text("update_available_format"),
+                    availableUpdateTag
+                ),
+                action: #selector(openLatestRelease),
+                key: ""
+            )
+        }
         menu.addItem(.separator())
 
         // Always-on-top toggle (accessible without opening the window).
@@ -784,6 +772,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         menu.addItem(.separator())
         addItem(menu, title: LocalizationManager.shared.text("about"), action: #selector(showAbout), key: "")
         addItem(menu, title: LocalizationManager.shared.text("quit"), action: #selector(quit), key: "q")
+    }
+
+    @objc private func openLatestRelease() {
+        guard let url = URL(string: "https://github.com/samgum/Ditto-macOS/releases/latest") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @discardableResult

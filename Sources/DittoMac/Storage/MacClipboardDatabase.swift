@@ -33,7 +33,9 @@ final class MacClipboardDatabase {
             )
         }
 
-        let flags = readOnly ? SQLITE_OPEN_READONLY : (SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE)
+        let flags = readOnly
+            ? (SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX)
+            : (SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX)
         guard sqlite3_open_v2(url.path, &database, flags, nil) == SQLITE_OK else {
             let message = database.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? url.path
             throw MacClipboardDatabaseError.openFailed(message)
@@ -41,8 +43,11 @@ final class MacClipboardDatabase {
 
         try execute("PRAGMA foreign_keys = ON")
         if readOnly == false {
-            try execute(useWAL ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE")
             try execute("PRAGMA busy_timeout = 5000")
+            try execute(useWAL ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE")
+            try execute("PRAGMA synchronous = NORMAL")
+            try execute("PRAGMA wal_autocheckpoint = 256")
+            try execute("PRAGMA journal_size_limit = 8388608")
             try createTables()
             try migrate()       // ensure every column exists BEFORE indexes
             try createIndexes()
@@ -239,6 +244,18 @@ final class MacClipboardDatabase {
     func replaceEntries(_ entries: [ClipboardEntry]) throws {
         try transaction {
             try execute("DELETE FROM ClipboardEntries")
+            for entry in entries {
+                try upsertEntry(entry)
+            }
+        }
+    }
+
+    func applyEntryChanges(upserting entries: [ClipboardEntry], deleting ids: [UUID]) throws {
+        guard entries.isEmpty == false || ids.isEmpty == false else { return }
+        try transaction {
+            for id in ids {
+                try deleteEntry(id: id)
+            }
             for entry in entries {
                 try upsertEntry(entry)
             }
@@ -513,7 +530,13 @@ final class MacClipboardDatabase {
     }
 
     func vacuum() throws {
+        try checkpoint()
         try execute("VACUUM")
+        try execute("PRAGMA optimize")
+    }
+
+    func checkpoint() throws {
+        try execute("PRAGMA wal_checkpoint(TRUNCATE)")
     }
 
     // MARK: - Copy buffers

@@ -6,7 +6,7 @@ import Foundation
 /// the Windows `SaveAnimation` visual feedback.
 final class SaveAnimation {
     static let shared = SaveAnimation()
-    private var animationWindow: NSWindow?
+    private var animationWindow: NSPanel?
 
     private init() {}
 
@@ -27,11 +27,13 @@ final class SaveAnimation {
             y: origin.y - size.height / 2,
             width: size.width, height: size.height)
 
-        let window = NSWindow(
+        let window = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false)
+        window.isFloatingPanel = true
+        window.becomesKeyOnlyIfNeeded = true
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
@@ -57,7 +59,7 @@ final class SaveAnimation {
 
         window.contentView = view
         window.alphaValue = 1
-        window.orderFrontRegardless()
+        window.orderFront(nil)
         animationWindow = window
 
         // Animate: slide up + fade out over 0.5s.
