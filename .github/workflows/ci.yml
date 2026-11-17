@@ -17,7 +17,7 @@ env:
 jobs:
   build:
     name: Build & test (macOS)
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,7 +36,7 @@ jobs:
 
   package:
     name: Package DMG
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: build
     # Build a DMG on every push to main and on tags; releases only on tags.
     if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
