@@ -313,7 +313,16 @@ final class LocalizationManager {
         "db_size": "Database size",
         "available_space": "Available space",
         "db_relocation_verified": "The copy passed its integrity check.",
-        "db_relocation_rolled_back": "Nothing was moved. The current database is unchanged."
+        "db_relocation_rolled_back": "Nothing was moved. The current database is unchanged.",
+        "copy_buffers_desc": "Copy buffers capture the current clipboard into a numbered slot. Set a hot key per slot (copy and paste).",
+        "friends_desc": "Manage friends under the menu bar ▸ Friends. This tab lists current friends.",
+        "accessibility_setup_steps": "1. Open System Settings ▸ Privacy & Security ▸ Accessibility.\n2. If Ditto is already in the list (from a previous version), select it and click − to REMOVE it.\n3. Click + and add /Applications/Ditto.app.\n4. Enable the toggle.\nBecause each build is freshly signed, an old entry won't work — you must remove and re-add after every update.",
+        "move": "Move",
+        "rename": "Rename…",
+        "paste_as_image": "Paste as Image",
+        "position_at_cursor": "At Cursor",
+        "position_previous": "Previous Position",
+        "all_friends": "All Friends"
     ]
 }
 

@@ -77,8 +77,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         Self.log("status item configured")
         if DittoSettings.checkForUpdates { checkForUpdates() }
         activeAppTracker.start()
-        loginAgentManager.installOrRefresh()
-        Self.log("login agent installed")
+        if DittoSettings.openAtLogin {
+            loginAgentManager.installOrRefresh()
+            Self.log("login agent installed")
+        } else {
+            loginAgentManager.disable()
+            Self.log("login agent disabled by user setting")
+        }
 
         let monitor = ClipboardMonitor(store: store)
         monitor.onChange = { [weak self] entry in
@@ -162,10 +167,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         guard let url = URL(string: "https://api.github.com/repos/samgum/Ditto-macOS/releases/latest") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("Ditto-macOS", forHTTPHeaderField: "User-Agent")
         URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String else { return }
-            let remote = tagName.replacingOccurrences(of: "v", with: "")
+            let remote = (tagName.hasPrefix("v") || tagName.hasPrefix("V"))
+                ? String(tagName.dropFirst())
+                : tagName
             let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
             if remote.compare(current, options: .numeric) == .orderedDescending {
                 DispatchQueue.main.async {
@@ -409,9 +418,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
             preferencesWindowController = PreferencesWindowController(store: store, copyBufferManager: copyBufferManager, syncCoordinator: syncCoordinator) { [weak self] in
                 self?.reregisterHotKeys()
                 self?.store.enforceLimit()
-                self?.historyWindowController?.refresh()
+                self?.store.enforceExpiry()
                 self?.refreshLocalizedText()
                 self?.applyThemeGlobally()
+                self?.historyWindowController?.applyWindowChromeFromOutside()
                 self?.historyWindowController?.refresh()
             }
         }
@@ -493,16 +503,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     /// Runs a potentially slow database operation off the main thread and
     /// reports the outcome — including the underlying error text, so a failure
     /// is actionable instead of a bare "Operation failed."
-    private func runDatabaseTask(work: @escaping () throws -> Void, successMessage: String) {
-        DispatchQueue.global(qos: .userInitiated).async {
+    private func runDatabaseTask(
+        work: @escaping () throws -> Void,
+        successMessage: String,
+        onSuccessMain: (() -> Void)? = nil
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             var message = successMessage
+            var succeeded = false
             do {
                 try work()
+                succeeded = true
             } catch {
                 message = LocalizationManager.shared.text("operation_failed")
                     + "\n" + ClipboardStore.describe(error)
             }
             DispatchQueue.main.async { [weak self] in
+                if succeeded { onSuccessMain?() }
                 self?.showAlert(message: message)
             }
         }
@@ -562,13 +579,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
         panel.nameFieldStringValue = "Ditto-History.db"
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                try self?.store.exportArchive(to: url)
-                self?.showAlert(message: LocalizationManager.shared.text("export_success"))
-            } catch {
-                self?.showAlert(message: LocalizationManager.shared.text("operation_failed"))
-            }
+            guard response == .OK, let url = panel.url, let self else { return }
+            self.runDatabaseTask(
+                work: { try self.store.exportArchive(to: url) },
+                successMessage: LocalizationManager.shared.text("export_success")
+            )
         }
     }
 
@@ -577,14 +592,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
         panel.allowsMultipleSelection = false
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                try self?.store.importArchive(from: url)
-                self?.historyWindowController?.refresh()
-                self?.showAlert(message: LocalizationManager.shared.text("import_success"))
-            } catch {
-                self?.showAlert(message: LocalizationManager.shared.text("operation_failed"))
-            }
+            guard response == .OK, let url = panel.url, let self else { return }
+            self.runDatabaseTask(
+                work: { try self.store.importArchive(from: url) },
+                successMessage: LocalizationManager.shared.text("import_success"),
+                onSuccessMain: { [weak self] in
+                    self?.reregisterHotKeys()
+                    self?.historyWindowController?.refreshText()
+                }
+            )
         }
     }
 
@@ -593,13 +609,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
         panel.allowsMultipleSelection = false
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                let count = try self?.store.importWindowsDittoDatabase(from: url) ?? 0
-                self?.historyWindowController?.refresh()
-                self?.showAlert(message: LocalizationManager.shared.text("import_windows_success") + " (\(count))")
-            } catch {
-                self?.showAlert(message: LocalizationManager.shared.text("operation_failed"))
+            guard response == .OK, let url = panel.url, let self else { return }
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self else { return }
+                let message: String
+                var imported = false
+                do {
+                    let count = try self.store.importWindowsDittoDatabase(from: url)
+                    message = LocalizationManager.shared.text("import_windows_success") + " (\(count))"
+                    imported = true
+                } catch {
+                    message = LocalizationManager.shared.text("operation_failed")
+                        + "\n" + ClipboardStore.describe(error)
+                }
+                DispatchQueue.main.async { [weak self] in
+                    if imported {
+                        self?.reregisterHotKeys()
+                        self?.historyWindowController?.refreshText()
+                    }
+                    self?.showAlert(message: message)
+                }
             }
         }
     }
@@ -612,15 +641,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
     }
 
     private func refreshLocalizedText() {
+        applyLayoutDirection()
         historyWindowController?.refreshText()
         preferencesWindowController?.refreshText()
-        // Re-localize any open secondary windows (titles are set at init time).
         groupsWindowController?.refreshText()
         friendsWindowController?.refreshText()
-        statisticsWindowController?.window?.title = LocalizationManager.shared.text("statistics")
-        statisticsWindowController?.refresh()
-        propertiesWindowController?.window?.title = LocalizationManager.shared.text("clip_properties")
-        editorWindowController?.window?.title = LocalizationManager.shared.text("edit_clip")
+        statisticsWindowController?.refreshText()
+        propertiesWindowController?.refreshText()
+        editorWindowController?.refreshText()
         qrWindowController?.window?.title = LocalizationManager.shared.text("qr_code")
         imageViewerWindowController?.window?.title = LocalizationManager.shared.text("app_name")
         if let statusMenu { rebuildStatusMenu(statusMenu) }
@@ -916,7 +944,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         store.copyToPasteboard(entry, options: options)
         let expectedChangeCount = NSPasteboard.general.changeCount
         store.markPasted(entry)
-        Statistics.shared.recordPaste()
+        // pasteToPreviousApplication() already records the paste stat.
         pasteToPreviousApplication()
         if let snapshot {
             ClipboardSaveRestore.restore(snapshot, onlyIfChangeCount: expectedChangeCount) { [weak self] in self?.monitor?.syncChangeCount() }
@@ -925,6 +953,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     func showProperties(for entry: ClipboardEntry) {
         propertiesWindowController = ClipPropertiesWindowController(store: store, entry: entry) { [weak self] in
+            self?.reregisterHotKeys()
             self?.historyWindowController?.refresh()
         }
         propertiesWindowController?.showWindow(nil)
@@ -962,9 +991,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = "clip.txt"
-        panel.begin { response in
+        panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
-            try? entry.text?.write(to: url, atomically: true, encoding: .utf8)
+            do {
+                let text = entry.text ?? self?.store.fullText(for: entry) ?? ""
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                self?.showAlert(message: LocalizationManager.shared.text("operation_failed") + "\n" + error.localizedDescription)
+            }
         }
     }
 
@@ -973,9 +1007,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = "clip.png"
-        panel.begin { response in
+        panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
-            try? data.write(to: url)
+            do {
+                try data.write(to: url, options: .atomic)
+            } catch {
+                self?.showAlert(message: LocalizationManager.shared.text("operation_failed") + "\n" + error.localizedDescription)
+            }
         }
     }
 
@@ -984,9 +1022,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "clip.pdf"
-        panel.begin { response in
+        panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
-            try? data.write(to: url)
+            do {
+                try data.write(to: url, options: .atomic)
+            } catch {
+                self?.showAlert(message: LocalizationManager.shared.text("operation_failed") + "\n" + error.localizedDescription)
+            }
         }
     }
 
@@ -1028,10 +1070,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Histor
 
     // MARK: - Helpers
 
-    private func openTemplateURL(_ template: String, query: String) {
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+    static func buildQueryURL(template: String, query: String) -> URL? {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: ":&+=?/#;")
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
         let urlString = template.replacingOccurrences(of: "%s", with: encoded)
-        if let url = URL(string: urlString) {
+        return URL(string: urlString)
+    }
+
+    private func openTemplateURL(_ template: String, query: String) {
+        if let url = Self.buildQueryURL(template: template, query: query) {
             NSWorkspace.shared.open(url)
         }
     }

@@ -49,8 +49,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let countLabel = NSTextField(labelWithString: "")
     private let emptyStateLabel = NSTextField(wrappingLabelWithString: "")
     private var pinButton: NSButton?
-    private let previewPanel = NSTextView()
-    private let previewScroll = NSScrollView()
+    private var toolbarButtonsByKey: [(key: String, button: NSButton)] = []
+    private let previewScroll = NSTextView.scrollableTextView()
+    private var previewPanel: NSTextView { previewScroll.documentView as! NSTextView }
     private var previewHeightConstraint: NSLayoutConstraint?
     private var scrollViewBottomToPreviewConstraint: NSLayoutConstraint?
     private var descriptionVisible = false
@@ -209,6 +210,14 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         tableView.tableColumns.first { $0.identifier.rawValue == "clip" }?.title = LocalizationManager.shared.text("clip")
         tableView.tableColumns.first { $0.identifier.rawValue == "type" }?.title = LocalizationManager.shared.text("type")
         tableView.tableColumns.first { $0.identifier.rawValue == "date" }?.title = LocalizationManager.shared.text("date")
+        for (key, button) in toolbarButtonsByKey {
+            let localized = LocalizationManager.shared.text(key)
+            button.toolTip = localized
+            button.setAccessibilityLabel(localized)
+        }
+        let pinTitle = LocalizationManager.shared.text("always_on_top")
+        pinButton?.toolTip = pinTitle
+        pinButton?.setAccessibilityLabel(pinTitle)
         updateStorageWarning()
         refresh()
     }
@@ -251,7 +260,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let restoredRows = IndexSet(filteredEntries.enumerated().compactMap { index, entry in
             selectedIDs.contains(entry.id) ? index : nil
         })
-        tableView.selectRowIndexes(restoredRows, byExtendingSelection: false)
+        if restoredRows.isEmpty == false {
+            tableView.selectRowIndexes(restoredRows, byExtendingSelection: false)
+        } else if filteredEntries.isEmpty == false {
+            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        }
 
         let total = allEntries.count
         if total == 0 {
@@ -296,6 +309,14 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             item.setString(text, forType: .string)
             hasItemData = true
         }
+        if let rtfBlobKey = entry.rtfBlobKey, let data = store.blobData(named: rtfBlobKey) {
+            item.setData(data, forType: .rtf)
+            hasItemData = true
+        }
+        if let htmlBlobKey = entry.htmlBlobKey, let data = store.blobData(named: htmlBlobKey) {
+            item.setData(data, forType: .dittoHTML)
+            hasItemData = true
+        }
         if let imageBlobKey = entry.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
             item.setData(data, forType: .png)
             hasItemData = true
@@ -304,8 +325,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             item.setData(data, forType: .pdf)
             hasItemData = true
         }
-        if let fileURLs = entry.fileURLs, fileURLs.isEmpty == false {
-            item.setString(fileURLs.first ?? "", forType: .fileURL)
+        if let firstPath = entry.fileURLs?.first, firstPath.isEmpty == false {
+            item.setString(URL(fileURLWithPath: firstPath).absoluteString, forType: .fileURL)
             hasItemData = true
         }
         return hasItemData ? item : nil
@@ -319,26 +340,27 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
         let pb = info.draggingPasteboard
-        // Accept text
-        if let text = pb.string(forType: .string), text.isEmpty == false {
-            store.addClipboardPayload(text: text, rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])
-            refresh()
-            return true
-        }
-        // Accept images
-        if let imageData = ClipboardMonitor.imageData(from: pb) {
-            store.addClipboardPayload(text: nil, rtfData: nil, htmlData: nil, imageData: imageData, fileURLs: [])
-            refresh()
-            return true
-        }
-        // Accept files
         let fileURLs = ClipboardMonitor.fileURLs(from: pb)
-        if fileURLs.isEmpty == false {
-            store.addClipboardPayload(text: nil, rtfData: nil, htmlData: nil, imageData: nil, fileURLs: fileURLs)
-            refresh()
-            return true
+        // Finder drags put the filename/path into .string alongside .fileURL;
+        // omit redundant path strings so file drops are stored as true file clips.
+        let text = fileURLs.isEmpty ? pb.string(forType: .string) : nil
+        let rtfData = pb.data(forType: .rtf)
+        let htmlData = pb.data(forType: .dittoHTML)
+        let imageData = ClipboardMonitor.imageData(from: pb)
+        let pdfData = pb.data(forType: .pdf)
+
+        guard store.addClipboardPayload(
+            text: text,
+            rtfData: rtfData,
+            htmlData: htmlData,
+            imageData: imageData,
+            pdfData: pdfData,
+            fileURLs: fileURLs
+        ) != nil else {
+            return false
         }
-        return false
+        refresh()
+        return true
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -574,15 +596,20 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     @objc private func pinToTopSelectedEntry() {
-        guard let entry = currentEntry else { return }
-        store.toggleNeverAutoDelete(id: entry.id) // pin
-        store.moveClip(id: entry.id, direction: .top)
+        let entries = selectedEntries
+        guard entries.isEmpty == false else { return }
+        for entry in entries.reversed() {
+            store.setPinnedToTop(id: entry.id)
+        }
         refresh()
     }
 
     @objc private func unpinSelectedEntry() {
-        guard let entry = currentEntry else { return }
-        store.toggleNeverAutoDelete(id: entry.id) // unpin
+        let entries = selectedEntries
+        guard entries.isEmpty == false else { return }
+        for entry in entries {
+            store.unpin(id: entry.id)
+        }
         refresh()
     }
 
@@ -861,7 +888,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
         let pinItem = NSMenuItem(title: LocalizationManager.shared.text("never_auto_delete"), action: #selector(toggleNeverAutoDeleteSelectedEntry), keyEquivalent: "")
         pinItem.target = self
-        pinItem.state = (currentEntry?.isPinned == true) ? .on : .off
+        pinItem.state = (currentEntry?.neverAutoDelete == true) ? .on : .off
         menu.addItem(pinItem)
 
         // Pin to top (never-delete + highest order) / unpin.
@@ -884,7 +911,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         topItem.target = self
         menu.addItem(topItem)
 
-        let moveSubmenuItem = NSMenuItem(title: "…", action: nil, keyEquivalent: "")
+        let moveSubmenuItem = NSMenuItem(title: LocalizationManager.shared.text("move"), action: nil, keyEquivalent: "")
         let moveSubmenu = NSMenu()
         let upItem = NSMenuItem(title: LocalizationManager.shared.text("move_up"), action: #selector(moveUpSelectedEntry), keyEquivalent: "")
         upItem.target = self
@@ -896,7 +923,6 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         moveSubmenu.addItem(downItem)
         moveSubmenu.addItem(lastItem)
         moveSubmenuItem.submenu = moveSubmenu
-        moveSubmenuItem.title = LocalizationManager.shared.text("move_top").components(separatedBy: " to ").first ?? "Move"
         menu.addItem(moveSubmenuItem)
 
         menu.addItem(.separator())
@@ -956,15 +982,19 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         emailItem.target = self
         menu.addItem(emailItem)
 
-        let friendItem = NSMenuItem(title: LocalizationManager.shared.text("send_to_friend"), action: #selector(sendToFriend), keyEquivalent: "")
-        friendItem.target = self
-        menu.addItem(friendItem)
-
-        // Send to specific friend submenu
         let friends = store.loadFriends()
-        if friends.isEmpty == false {
+        if friends.isEmpty {
+            let friendItem = NSMenuItem(title: LocalizationManager.shared.text("send_to_friend"), action: #selector(sendToFriend), keyEquivalent: "")
+            friendItem.target = self
+            friendItem.isEnabled = false
+            menu.addItem(friendItem)
+        } else {
             let sendToSubmenuItem = NSMenuItem(title: LocalizationManager.shared.text("send_to_friend"), action: nil, keyEquivalent: "")
             let sendToSubmenu = NSMenu()
+            let allFriendsItem = NSMenuItem(title: LocalizationManager.shared.text("all_friends"), action: #selector(sendToFriend), keyEquivalent: "")
+            allFriendsItem.target = self
+            sendToSubmenu.addItem(allFriendsItem)
+            sendToSubmenu.addItem(.separator())
             for friend in friends {
                 let item = NSMenuItem(title: friend.name, action: #selector(sendToSpecificFriend(_:)), keyEquivalent: "")
                 item.target = self
@@ -1031,7 +1061,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             (LocalizationManager.shared.text("ascii_only"), \SpecialPasteOptions.asciiOnly),
             (LocalizationManager.shared.text("slugify"), \SpecialPasteOptions.slugify),
             (LocalizationManager.shared.text("append_date_time"), \SpecialPasteOptions.appendDateTime),
-            (LocalizationManager.shared.text("generate_guid"), \SpecialPasteOptions.generateGuid)
+            (LocalizationManager.shared.text("generate_guid"), \SpecialPasteOptions.generateGuid),
+            (LocalizationManager.shared.text("paste_as_image"), \SpecialPasteOptions.pasteAsImage)
         ]
         for (title, keyPath) in items {
             var options = SpecialPasteOptions()
@@ -1174,24 +1205,39 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         }
 
         if window?.firstResponder is NSTextView, searchField.currentEditor() != nil {
+            let hasMarkedText = (searchField.currentEditor() as? NSTextView)?.hasMarkedText() == true
+            if hasMarkedText {
+                return event
+            }
             if Int(event.keyCode) == kVK_Escape {
-                window?.makeFirstResponder(tableView)
-                return nil
-            }
-            // Up arrow recalls the last search (APPLY_LAST_SEARCH).
-            if Int(event.keyCode) == kVK_UpArrow, lastSearchQuery.isEmpty == false {
-                searchField.stringValue = lastSearchQuery
-                applySearch()
-                return nil
-            }
-            // Down/Up arrow (without modifiers) jumps into the list so you can
-            // arrow-navigate results without leaving the search box's context.
-            if modifiers.isEmpty {
-                if Int(event.keyCode) == kVK_DownArrow, filteredEntries.isEmpty == false {
-                    window?.makeFirstResponder(tableView)
-                    if tableView.selectedRow < 0 { tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
-                    return nil
+                if searchField.stringValue.isEmpty == false {
+                    searchField.stringValue = ""
+                    applySearch()
+                } else {
+                    window?.orderOut(nil)
                 }
+                return nil
+            }
+            if modifiers.isEmpty, (Int(event.keyCode) == kVK_Return || Int(event.keyCode) == kVK_ANSI_KeypadEnter) {
+                pasteSelectedEntry()
+                return nil
+            }
+            if modifiers.isEmpty, Int(event.keyCode) == kVK_UpArrow {
+                if searchField.stringValue.isEmpty, lastSearchQuery.isEmpty == false, tableView.selectedRow <= 0 {
+                    searchField.stringValue = lastSearchQuery
+                    applySearch()
+                } else if tableView.selectedRow > 0 {
+                    let prev = tableView.selectedRow - 1
+                    tableView.selectRowIndexes(IndexSet(integer: prev), byExtendingSelection: false)
+                    tableView.scrollRowToVisible(prev)
+                }
+                return nil
+            }
+            if modifiers.isEmpty, Int(event.keyCode) == kVK_DownArrow, filteredEntries.isEmpty == false {
+                let next = min(max(0, tableView.selectedRow + 1), filteredEntries.count - 1)
+                tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
+                tableView.scrollRowToVisible(next)
+                return nil
             }
             return event
         }
@@ -1270,7 +1316,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         tableView.menu?.delegate = self
         // Enable drag-out (to other apps) and drag-in (files/text onto list).
         tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
-        tableView.registerForDraggedTypes([.string, .png, .tiff, .fileURL])
+        tableView.registerForDraggedTypes([.fileURL, .png, .tiff, .pdf, .rtf, .dittoHTML, .string])
 
         let clipColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("clip"))
         clipColumn.title = LocalizationManager.shared.text("clip")
@@ -1294,7 +1340,6 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         previewPanel.drawsBackground = false
         previewPanel.font = NSFont.systemFont(ofSize: CGFloat(DittoSettings.fontSize))
         previewPanel.textContainerInset = NSSize(width: 8, height: 6)
-        previewScroll.documentView = previewPanel
         previewScroll.hasVerticalScroller = true
         previewScroll.translatesAutoresizingMaskIntoConstraints = false
         previewScroll.wantsLayer = true
@@ -1420,12 +1465,17 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         applyWindowChrome()
         // Catch up on anything that changed while the window was hidden.
         applyDeferredRefresh()
+        if DittoSettings.moveSelectionOnOpen, filteredEntries.isEmpty == false {
+            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+            tableView.scrollRowToVisible(0)
+        }
         // Position the window. .atCursor places it near the mouse pointer
         // (Ditto's popup-at-cursor behaviour); .previousPosition keeps the last
         // frame the user left it at.
         if DittoSettings.windowPositioning == .atCursor, let window {
             let mouse = NSEvent.mouseLocation
-            let screen = NSScreen.main?.visibleFrame ?? .zero
+            let activeScreen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+            let screen = activeScreen?.visibleFrame ?? .zero
             var origin = NSPoint(x: mouse.x + 12, y: mouse.y - window.frame.height / 2)
             // Keep it fully on-screen.
             origin.x = min(max(origin.x, screen.minX), screen.maxX - window.frame.width)
@@ -1524,20 +1574,22 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     private func makeToolbar() -> NSView {
         let buttons: [(String, Selector, String)] = [
-            (LocalizationManager.shared.text("copy"), #selector(copySelectedEntry), "doc.on.doc"),
-            (LocalizationManager.shared.text("paste"), #selector(pasteSelectedEntry), "arrow.down.doc"),
-            (LocalizationManager.shared.text("favorite"), #selector(toggleFavoriteSelectedEntry), "star"),
-            (LocalizationManager.shared.text("properties"), #selector(showProperties), "info.circle"),
-            (LocalizationManager.shared.text("edit_clip"), #selector(showEditor), "square.and.pencil"),
-            (LocalizationManager.shared.text("qr_code"), #selector(showQRCode), "qrcode"),
-            (LocalizationManager.shared.text("delete"), #selector(deleteSelectedEntry), "trash"),
-            (LocalizationManager.shared.text("clear"), #selector(clearHistory), "trash.circle")
+            ("copy", #selector(copySelectedEntry), "doc.on.doc"),
+            ("paste", #selector(pasteSelectedEntry), "arrow.down.doc"),
+            ("favorite", #selector(toggleFavoriteSelectedEntry), "star"),
+            ("properties", #selector(showProperties), "info.circle"),
+            ("edit_clip", #selector(showEditor), "square.and.pencil"),
+            ("qr_code", #selector(showQRCode), "qrcode"),
+            ("delete", #selector(deleteSelectedEntry), "trash"),
+            ("clear", #selector(clearHistory), "trash.circle")
         ]
+        toolbarButtonsByKey.removeAll()
         let stack = NSStackView()
         stack.orientation = .horizontal
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for (title, action, symbol) in buttons {
+        for (key, action, symbol) in buttons {
+            let title = LocalizationManager.shared.text(key)
             let button: NSButton
             if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: title) {
                 button = NSButton(image: image, target: self, action: action)
@@ -1547,6 +1599,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
                 button.bezelStyle = .rounded
             }
             button.toolTip = title
+            button.setAccessibilityLabel(title)
+            toolbarButtonsByKey.append((key: key, button: button))
             stack.addArrangedSubview(button)
         }
 

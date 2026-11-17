@@ -44,7 +44,7 @@ enum WindowsEncryption {
         let masterSeed2 = randomBytes(32) // AES-256 key for the transform rounds
 
         let masterKey = sha256(Data(password.utf8))
-        let transformedKey = transformKey(masterKey: masterKey, seed2: masterSeed2)
+        let transformedKey = try transformKey(masterKey: masterKey, seed2: masterSeed2, rounds: keyEncRounds)
         let finalKey = sha256(masterSeed + transformedKey)
 
         let contentsHash = sha256(plaintext)
@@ -92,10 +92,11 @@ enum WindowsEncryption {
         let iv = header.subdata(in: 56..<72)
         let contentsHash = header.subdata(in: 72..<104)
         let masterSeed2 = header.subdata(in: 104..<136)
-        // dwKeyEncRounds at 136..<140 — we use the fixed default for the transform.
+        let rounds = header.subdata(in: 136..<140).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian }
+        guard (1...10_000_000).contains(rounds) else { throw Error.invalidHeader }
 
         let masterKey = sha256(Data(password.utf8))
-        let transformedKey = transformKey(masterKey: masterKey, seed2: masterSeed2)
+        let transformedKey = try transformKey(masterKey: masterKey, seed2: masterSeed2, rounds: rounds)
         let finalKey = sha256(masterSeed + transformedKey)
 
         let ciphertext = input.subdata(in: headerSize..<input.count)
@@ -107,45 +108,44 @@ enum WindowsEncryption {
 
     // MARK: - Primitives
 
-    /// KeePass AES-KDF transform: 100,000 rounds of AES-ECB over the 32-byte
+    /// KeePass AES-KDF transform: `rounds` iterations of AES-ECB over the 32-byte
     /// master key, keyed by seed2 (AES-256, both 16-byte halves per round).
-    private static func transformKey(masterKey: Data, seed2: Data) -> Data {
-        var current = masterKey
-        for _ in 0..<keyEncRounds {
-            current = aesECB(current, key: seed2, encrypt: true)
+    /// Reuses a single `CCCryptorRef` key schedule across all rounds.
+    private static func transformKey(masterKey: Data, seed2: Data, rounds: UInt32) throws -> Data {
+        var cryptor: CCCryptorRef?
+        let createStatus = seed2.withUnsafeBytes { keyBytes in
+            CCCryptorCreate(
+                CCOperation(kCCEncrypt),
+                CCAlgorithm(kCCAlgorithmAES),
+                CCOptions(kCCOptionECBMode),
+                keyBytes.baseAddress,
+                seed2.count,
+                nil,
+                &cryptor
+            )
         }
-        return current
+        guard createStatus == kCCSuccess, let cryptor else {
+            throw Error.cryptoFailed(createStatus)
+        }
+        defer { CCCryptorRelease(cryptor) }
+
+        var buffer = masterKey
+        let byteCount = buffer.count
+        var status: CCCryptorStatus = CCCryptorStatus(kCCSuccess)
+        buffer.withUnsafeMutableBytes { rawBuffer in
+            guard let ptr = rawBuffer.baseAddress else { return }
+            var moved = 0
+            for _ in 0..<rounds {
+                status = CCCryptorUpdate(cryptor, ptr, byteCount, ptr, byteCount, &moved)
+                if status != kCCSuccess { break }
+            }
+        }
+        guard status == kCCSuccess else { throw Error.cryptoFailed(status) }
+        return buffer
     }
 
     private static func sha256(_ data: Data) -> Data {
         Data(SHA256.hash(data: data))
-    }
-
-    private static func aesECB(_ input: Data, key: Data, encrypt: Bool) -> Data {
-        let outputSize = input.count
-        var output = Data(count: outputSize)
-        var moved: Int = 0
-        var status: Int32 = -1
-        input.withUnsafeBytes { inBytes in
-            key.withUnsafeBytes { keyBytes in
-                output.withUnsafeMutableBytes { outBytes in
-                    status = CCCrypt(
-                        encrypt ? CCOperation(kCCEncrypt) : CCOperation(kCCDecrypt),
-                        CCAlgorithm(kCCAlgorithmAES),
-                        CCOptions(kCCOptionECBMode),
-                        keyBytes.baseAddress, key.count,
-                        nil,
-                        inBytes.baseAddress, input.count,
-                        outBytes.baseAddress, outputSize,
-                        &moved
-                    )
-                }
-            }
-        }
-        // On failure, bail to the caller by returning a zero-length result —
-        // never the untransformed input (that would silently corrupt the key
-        // derivation). Callers treat empty as a fatal crypto error.
-        return status == kCCSuccess ? output.prefix(moved) : Data()
     }
 
     private static func aesCBC(_ input: Data, key: Data, iv: Data, encrypt: Bool) throws -> Data {

@@ -223,5 +223,11 @@
   "db_size": "データベースのサイズ",
   "available_space": "空き容量",
   "db_relocation_verified": "コピーは整合性チェックに合格しました。",
-  "db_relocation_rolled_back": "何も移動していません。現在のデータベースは変更されていません。"
+  "db_relocation_rolled_back": "何も移動していません。現在のデータベースは変更されていません。",
+  "move": "移動",
+  "rename": "名前を変更…",
+  "paste_as_image": "画像として貼り付け",
+  "position_at_cursor": "カーソル位置",
+  "position_previous": "前回の位置",
+  "all_friends": "すべてのフレンド"
 }

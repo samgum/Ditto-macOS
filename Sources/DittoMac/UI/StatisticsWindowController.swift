@@ -3,12 +3,12 @@ import Foundation
 
 /// Copy/paste statistics window. Mirrors the Windows Options ▸ Stats tab.
 final class StatisticsWindowController: NSWindowController {
-    private let scrollView = NSTextView()
+    private let reportLabel = NSTextField(wrappingLabelWithString: "")
     private let resetButton = NSButton(title: "", target: nil, action: nil)
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -18,10 +18,9 @@ final class StatisticsWindowController: NSWindowController {
         window.center()
         super.init(window: window)
 
-        scrollView.isEditable = false
-        scrollView.drawsBackground = false
-        scrollView.font = NSFont.systemFont(ofSize: 14)
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        reportLabel.isSelectable = true
+        reportLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .regular)
+        reportLabel.translatesAutoresizingMaskIntoConstraints = false
 
         resetButton.title = LocalizationManager.shared.text("reset_stats")
         resetButton.bezelStyle = .rounded
@@ -30,21 +29,27 @@ final class StatisticsWindowController: NSWindowController {
         resetButton.translatesAutoresizingMaskIntoConstraints = false
 
         let root = NSView()
-        root.addSubview(scrollView)
+        root.addSubview(reportLabel)
         root.addSubview(resetButton)
         window.contentView = root
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
-            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
-            scrollView.bottomAnchor.constraint(equalTo: resetButton.topAnchor, constant: -12),
-            resetButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            reportLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
+            reportLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            reportLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            reportLabel.bottomAnchor.constraint(lessThanOrEqualTo: resetButton.topAnchor, constant: -16),
+            resetButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
             resetButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16)
         ])
     }
 
     required init?(coder: NSCoder) { nil }
+
+    func refreshText() {
+        window?.title = LocalizationManager.shared.text("statistics")
+        resetButton.title = LocalizationManager.shared.text("reset_stats")
+        refresh()
+    }
 
     func refresh() {
         let stats = Statistics.shared
@@ -61,7 +66,7 @@ final class StatisticsWindowController: NSWindowController {
         \(LocalizationManager.shared.text("copies")): \(stats.totalCopies)
         \(LocalizationManager.shared.text("pastes")): \(stats.totalPastes)
         """
-        scrollView.string = report
+        reportLabel.stringValue = report
     }
 
     @objc private func resetTrip() {

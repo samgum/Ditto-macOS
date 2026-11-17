@@ -154,6 +154,13 @@ final class ClipboardStore {
             case .prepareFailed(let message): return message
             case .executeFailed(let message): return message
             }
+        case let importError as WindowsDittoDatabaseImportError:
+            switch importError {
+            case .openFailed(let message): return message
+            case .prepareFailed(let message): return message
+            case .invalidDatabase: return "The selected file is not a valid Windows Ditto database."
+            case .inflateFailed: return "Failed to decompress clipboard payload in the Windows database."
+            }
         default:
             return (error as NSError).localizedDescription
         }
@@ -292,11 +299,12 @@ final class ClipboardStore {
         return entry
     }
 
-    /// One above the newest non-pinned clip, so a promoted duplicate lands at
-    /// the top of the unpinned section.
-    private func nextClipOrder() -> Double {
-        let highest = entries.filter { $0.isPinned == false }.map(\.clipOrder).max()
-        return (highest ?? Date().timeIntervalSince1970) + 1
+    /// One above the newest clip in the target section, so a promoted clip
+    /// always lands at the top even when earlier promotions pushed `clipOrder`
+    /// slightly ahead of wall-clock time.
+    private func nextClipOrder(pinned: Bool = false) -> Double {
+        let highest = entries.filter { $0.isPinned == pinned }.map(\.clipOrder).max()
+        return max(Date().timeIntervalSince1970, (highest ?? 0) + 1)
     }
 
     // MARK: - Lookups
@@ -310,7 +318,18 @@ final class ClipboardStore {
         lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
         pendingBlobDeletions.formUnion(blobKeys(for: entries[index]))
-        entries[index] = entry
+        var updated = entry
+        let normalizedText = updated.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.crc = CRC32.checksumCapture(
+            text: normalizedText,
+            rtfData: updated.rtfBlobKey.flatMap(blobData(named:)),
+            htmlData: updated.htmlBlobKey.flatMap(blobData(named:)),
+            imageData: updated.imageBlobKey.flatMap(blobData(named:)),
+            pdfData: updated.pdfBlobKey.flatMap(blobData(named:)),
+            fileURLs: updated.fileURLs ?? []
+        )
+        entries[index] = updated
+        repinOrdering()
         persist()
     }
 
@@ -320,8 +339,13 @@ final class ClipboardStore {
     @discardableResult
     func createNewClip(text: String = "") -> ClipboardEntry {
         lock.lock(); defer { lock.unlock() }
-        let entry = ClipboardEntry(text: text.isEmpty ? nil : text, neverAutoDelete: true)
+        let entry = ClipboardEntry(
+            text: text.isEmpty ? nil : text,
+            neverAutoDelete: true,
+            clipOrder: nextClipOrder(pinned: true)
+        )
         entries.insert(entry, at: 0)
+        repinOrdering()
         persist()
         return entry
     }
@@ -337,51 +361,58 @@ final class ClipboardStore {
         pasteboard.clearContents()
         var pasteboardItems: [NSPasteboardItem] = []
 
-        let item = NSPasteboardItem()
-        var hasItemData = false
+        let primaryItem = NSPasteboardItem()
+        var hasPrimaryData = false
 
         if let text = transformed.text {
-            item.setString(text, forType: .string)
-            hasItemData = true
+            primaryItem.setString(text, forType: .string)
+            hasPrimaryData = true
         }
 
         if transformed.stripFormatting == false {
             if let rtfBlobKey = transformed.rtfBlobKey, let data = blobData(named: rtfBlobKey) {
-                item.setData(data, forType: .rtf)
-                hasItemData = true
+                primaryItem.setData(data, forType: .rtf)
+                hasPrimaryData = true
             }
             if let htmlBlobKey = transformed.htmlBlobKey, let data = blobData(named: htmlBlobKey) {
-                item.setData(data, forType: NSPasteboard.PasteboardType.dittoHTML)
-                hasItemData = true
+                primaryItem.setData(data, forType: NSPasteboard.PasteboardType.dittoHTML)
+                hasPrimaryData = true
             }
         }
 
-        if hasItemData {
-            pasteboardItems.append(item)
-        }
-
-        if transformed.imageRepresentation == nil, let imageBlobKey = transformed.imageBlobKey, let data = blobData(named: imageBlobKey) {
-            let imageItem = NSPasteboardItem()
-            imageItem.setData(data, forType: .png)
-            pasteboardItems.append(imageItem)
-        } else if let imageData = transformed.imageRepresentation {
-            let imageItem = NSPasteboardItem()
-            imageItem.setData(imageData, forType: .png)
-            pasteboardItems.append(imageItem)
+        if let imageData = transformed.imageRepresentation {
+            primaryItem.setData(imageData, forType: .png)
+            hasPrimaryData = true
+        } else if let imageBlobKey = transformed.imageBlobKey, let data = blobData(named: imageBlobKey) {
+            primaryItem.setData(data, forType: .png)
+            hasPrimaryData = true
         }
 
         if let pdfBlobKey = transformed.pdfBlobKey, let data = blobData(named: pdfBlobKey) {
-            let pdfItem = NSPasteboardItem()
-            pdfItem.setData(data, forType: .pdf)
-            pasteboardItems.append(pdfItem)
+            primaryItem.setData(data, forType: .pdf)
+            hasPrimaryData = true
         }
 
-        if let fileURLs = transformed.fileURLs {
-            for fileURL in fileURLs.map({ URL(fileURLWithPath: $0) }) {
-                let fileItem = NSPasteboardItem()
-                fileItem.setString(fileURL.absoluteString, forType: .fileURL)
-                pasteboardItems.append(fileItem)
+        if let fileURLs = transformed.fileURLs, fileURLs.isEmpty == false {
+            let urls = fileURLs.map { URL(fileURLWithPath: $0) }
+            if urls.count == 1, let single = urls.first {
+                primaryItem.setString(single.absoluteString, forType: .fileURL)
+                hasPrimaryData = true
+            } else {
+                if hasPrimaryData {
+                    pasteboardItems.append(primaryItem)
+                    hasPrimaryData = false
+                }
+                for fileURL in urls {
+                    let fileItem = NSPasteboardItem()
+                    fileItem.setString(fileURL.absoluteString, forType: .fileURL)
+                    pasteboardItems.append(fileItem)
+                }
             }
+        }
+
+        if hasPrimaryData {
+            pasteboardItems.insert(primaryItem, at: 0)
         }
 
         if pasteboardItems.isEmpty == false {
@@ -411,14 +442,11 @@ final class ClipboardStore {
         updated.pasteCount += 1
         updated.lastPasteDate = Date()
         if DittoSettings.updateTimeOnPaste {
-            updated.clipOrder = Date().timeIntervalSince1970
+            updated.clipOrder = nextClipOrder(pinned: updated.isPinned)
         }
         entries[index] = updated
         if DittoSettings.updateTimeOnPaste {
-            entries.sort { lhs, rhs in
-                if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
-                return lhs.clipOrder > rhs.clipOrder
-            }
+            repinOrdering()
         }
         persist()
     }
@@ -443,6 +471,24 @@ final class ClipboardStore {
         lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].neverAutoDelete.toggle()
+        repinOrdering()
+        persist()
+    }
+
+    func setPinnedToTop(id: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[index].neverAutoDelete = true
+        entries[index].clipOrder = nextClipOrder(pinned: true)
+        repinOrdering()
+        persist()
+    }
+
+    func unpin(id: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[index].neverAutoDelete = false
+        entries[index].isFavorite = false
         repinOrdering()
         persist()
     }
@@ -477,21 +523,53 @@ final class ClipboardStore {
         lock.lock(); defer { lock.unlock() }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         let pinned = entries[index].isPinned
-        let samePinned = entries.filter { $0.isPinned == pinned }
-        let orders = samePinned.map(\.clipOrder)
+        let sectionIndices = entries.indices.filter { entries[$0].isPinned == pinned }
+        guard let positionInSection = sectionIndices.firstIndex(of: index) else { return }
+        let orders = sectionIndices.map { entries[$0].clipOrder }
         let highest = orders.max() ?? Date().timeIntervalSince1970
         let lowest = orders.min() ?? Date().timeIntervalSince1970
+
         switch direction {
-        case .top, .up:
+        case .top:
+            guard positionInSection > 0 else { return }
             entries[index].clipOrder = highest + 1
-        case .last, .down:
+            repinOrdering()
+        case .last:
+            guard positionInSection < sectionIndices.count - 1 else { return }
             entries[index].clipOrder = lowest - 1
-        }
-        entries.sort { lhs, rhs in
-            if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
-            return lhs.clipOrder > rhs.clipOrder
+            repinOrdering()
+        case .up:
+            guard positionInSection > 0 else { return }
+            let neighborIndex = sectionIndices[positionInSection - 1]
+            entries.swapAt(index, neighborIndex)
+            normalizeSectionClipOrders(pinned: pinned)
+        case .down:
+            guard positionInSection < sectionIndices.count - 1 else { return }
+            let neighborIndex = sectionIndices[positionInSection + 1]
+            entries.swapAt(index, neighborIndex)
+            normalizeSectionClipOrders(pinned: pinned)
         }
         persist()
+    }
+
+    /// Ensures `clipOrder` is strictly descending across the section's current
+    /// array order so single-step swaps (`Move Up` / `Move Down`) survive SQLite
+    /// reloads even when two neighbors previously shared the same timestamp.
+    private func normalizeSectionClipOrders(pinned: Bool) {
+        let indices = entries.indices.filter { entries[$0].isPinned == pinned }
+        guard indices.count >= 2 else { return }
+        for offset in 1..<indices.count {
+            let prev = entries[indices[offset - 1]].clipOrder
+            if entries[indices[offset]].clipOrder >= prev {
+                let nextLower: Double
+                if offset + 1 < indices.count, entries[indices[offset + 1]].clipOrder < prev {
+                    nextLower = (prev + entries[indices[offset + 1]].clipOrder) / 2.0
+                } else {
+                    nextLower = prev - 1.0
+                }
+                entries[indices[offset]].clipOrder = (nextLower < prev) ? nextLower : (prev - 1.0)
+            }
+        }
     }
 
     private func repinOrdering() {
@@ -610,6 +688,11 @@ final class ClipboardStore {
     // MARK: - Import / Export
 
     func exportArchive(to url: URL) throws {
+        guard url.standardizedFileURL != databaseFileURL.standardizedFileURL else {
+            throw MacClipboardDatabaseError.executeFailed(
+                "Cannot overwrite the active database file during export."
+            )
+        }
         // Snapshot under the lock so the writer holds its own COW copy and
         // can't race a concurrent mutation.
         try database.exportArchive(entries: snapshotEntries(), groups: snapshotGroups(), to: url)
@@ -764,6 +847,11 @@ final class ClipboardStore {
     // MARK: - Database maintenance
 
     func backupDatabase(to url: URL) throws {
+        guard url.standardizedFileURL != databaseFileURL.standardizedFileURL else {
+            throw MacClipboardDatabaseError.executeFailed(
+                "Cannot overwrite the active database file during backup."
+            )
+        }
         guard flush() else {
             throw MacClipboardDatabaseError.executeFailed(
                 health.reason ?? "Pending clipboard changes could not be saved"

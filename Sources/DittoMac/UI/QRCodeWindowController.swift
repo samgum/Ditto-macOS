@@ -55,7 +55,14 @@ final class QRCodeWindowController: NSWindowController {
         panel.nameFieldStringValue = "qrcode.png"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? png.write(to: url)
+            do {
+                try png.write(to: url, options: .atomic)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = LocalizationManager.shared.text("operation_failed")
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
         }
     }
 }

@@ -6,7 +6,7 @@ Ditto for macOS 是一个使用 Swift / AppKit 编写的原生 macOS 剪贴板�
 
 **作者：伤感咩吖**
 
-**当前版本：1.2.6**
+**当前版本：1.2.7**
 
 **许可证：GPL-3.0**
 
@@ -99,14 +99,14 @@ Ditto for macOS 是一个使用 Swift / AppKit 编写的原生 macOS 剪贴板�
 Debug 构建：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build
 ```
 
 Release 构建：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build -c release
 ```
 
@@ -115,21 +115,21 @@ swift build -c release
 从源码运行应用：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift run DittoMac
 ```
 
 运行无头自测：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift run DittoMac --selftest
 ```
 
 期望自测结果：
 
 ```text
-84 passed, 0 failed
+101 passed, 0 failed
 ```
 
 自测覆盖文本变换、slugify、颜色检测、搜索、AES 往返、局域网同步安全默认值、二维码生成、数据库持久化与 SQLite 一致性备份/迁移往返（含完整性校验、拒绝覆盖已存在的数据库、迁移失败后清理临时文件）、单文件自包含备份、缺少 -shm 时对 WAL 数据库的恢复、拒绝缺失附件的损坏归档、置顶记录位于列表顶部时的捕获去重、重叠导入时共享 blob 的保留、PDF 捕获/归档/同步保真、分组重挂、复制缓冲清理、blob 生命周期清理、Windows 加密兼容辅助逻辑、Windows 导入器拒绝异常输入，以及图片粘贴路径行为。
@@ -137,14 +137,14 @@ swift run DittoMac --selftest
 运行界面布局检查（需要桌面会话，CI 中不执行）：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift run DittoMac --selftest-ui
 ```
 
 期望布局自测结果：
 
 ```text
-198 passed, 0 failed
+204 passed, 0 failed
 ```
 
 该检查会在 11 种语言、浅色/深色/跟随系统三种外观，以及默认 820×552 与最小
@@ -157,20 +157,20 @@ swift run DittoMac --selftest-ui
 构建 release 应用包并生成 DMG：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 bash scripts/package-dmg.sh
 ```
 
 生成产物：
 
 ```text
-dist/Ditto-macOS-1.2.6.dmg
+dist/Ditto-macOS-1.2.7.dmg
 .build/stage/Ditto.app
 ```
 
 打包脚本会：
 
-- 构建 release 二进制；
+- 构建通用二进制（`arm64` + `x86_64`）release 可执行文件；
 - 生成 `Ditto.app`；
 - 复制 `Info.plist`、图标和本地化资源；
 - 对应用进行 ad-hoc 签名；
@@ -435,7 +435,7 @@ Windows 点对点网络协议集成与数据库导入是不同功能，目前仍
 推荐验证流程：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build
 swift run DittoMac --selftest
 ```
@@ -443,7 +443,7 @@ swift run DittoMac --selftest
 发布验证流程：
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build -c release
 swift run DittoMac --selftest
 bash scripts/package-dmg.sh

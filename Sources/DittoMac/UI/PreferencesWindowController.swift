@@ -3,7 +3,7 @@ import Carbon
 import Foundation
 import UniformTypeIdentifiers
 
-final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
+final class PreferencesWindowController: NSWindowController, NSTabViewDelegate, NSWindowDelegate {
     private let store: ClipboardStore
     private let copyBufferManager: CopyBufferManager
     private let syncCoordinator: SyncCoordinator
@@ -12,6 +12,8 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     private let tabView = NSTabView()
     private let closeButton = NSButton(title: "", target: nil, action: nil)
     private var frameBeforeTabSelection: NSRect?
+    private var copyBufferCopyLabels: [NSTextField] = []
+    private var copyBufferPasteLabels: [NSTextField] = []
 
     // General
     private let languagePopup = NSPopUpButton()
@@ -24,12 +26,15 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     private let checkUpdatesButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let updateTimeOnPasteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let hideOnPasteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let saveNotificationButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let saveAnimationButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
 
     // Appearance
     private let themePopup = NSPopUpButton()
     private let accentWell = NSColorWell()
     private let fontSizePopup = NSPopUpButton()
     private let linesPerRowPopup = NSPopUpButton()
+    private let positioningPopup = NSPopUpButton()
     private let drawThumbnailsButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let pasteAsPlainTextButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
 
@@ -84,6 +89,7 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("preferences")
         super.init(window: window)
+        window.delegate = self
         configureContent()
         // Center only after the tab labels and their final intrinsic widths have
         // been laid out. Centering the placeholder frame first lets AppKit grow
@@ -94,6 +100,7 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     required init?(coder: NSCoder) { nil }
 
     func refreshText() {
+        commitPendingEdits()
         // Fully rebuild the content so EVERY label / checkbox / tab re-renders
         // in the current language (was only updating the title + popups, so the
         // window stayed stuck in the language it was first opened in).
@@ -105,6 +112,7 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     private func configureContent() {
         guard let window else { return }
         let preservedFrame = window.contentView?.subviews.isEmpty == false ? window.frame : nil
+        let previousSelectedTab = tabView.selectedTabViewItem.flatMap { tabView.indexOfTabViewItem($0) }
 
         // Make re-runnable: drop any previously-built tabs + checkbox boxes so
         // refreshText() can rebuild cleanly in a new language.
@@ -112,6 +120,8 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
             tabView.removeTabViewItem(tabView.tabViewItems[0])
         }
         checkboxBoxes.removeAll()
+        copyBufferCopyLabels.removeAll()
+        copyBufferPasteLabels.removeAll()
 
         tabView.tabViewType = .topTabsBezelBorder
         tabView.delegate = self
@@ -146,6 +156,9 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
             closeButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
             closeButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12)
         ])
+        if let previousSelectedTab, previousSelectedTab >= 0, previousSelectedTab < tabView.numberOfTabViewItems {
+            tabView.selectTabViewItem(at: previousSelectedTab)
+        }
         root.layoutSubtreeIfNeeded()
         if let preservedFrame {
             window.setFrame(preservedFrame, display: false)
@@ -156,6 +169,7 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     }
 
     func tabView(_ tabView: NSTabView, willSelect tabViewItem: NSTabViewItem?) {
+        commitPendingEdits()
         frameBeforeTabSelection = window?.frame
     }
 
@@ -185,13 +199,15 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         hotKeyPopup.action = #selector(hotKeyChanged)
         maxHistoryPopup.target = self
         maxHistoryPopup.action = #selector(maxHistoryChanged)
-        bindCheckbox(openAtLoginButton, title: LocalizationManager.shared.text("open_at_login"), default: loginAgent.isEnabled) { [weak self] in self?.toggleLogin($0) }
+        bindCheckbox(openAtLoginButton, title: LocalizationManager.shared.text("open_at_login"), default: DittoSettings.openAtLogin) { [weak self] in self?.toggleLogin($0) }
         bindCheckbox(playSoundButton, title: LocalizationManager.shared.text("play_sound_on_copy"), default: DittoSettings.playSoundOnCopy) { DittoSettings.playSoundOnCopy = $0 }
         bindCheckbox(promptOnDeleteButton, title: LocalizationManager.shared.text("prompt_on_delete"), default: DittoSettings.promptWhenDeleting) { DittoSettings.promptWhenDeleting = $0 }
         bindCheckbox(startupMessageButton, title: LocalizationManager.shared.text("show_startup_message"), default: DittoSettings.showStartupMessage) { DittoSettings.showStartupMessage = $0 }
         bindCheckbox(checkUpdatesButton, title: LocalizationManager.shared.text("check_for_updates"), default: DittoSettings.checkForUpdates) { DittoSettings.checkForUpdates = $0 }
         bindCheckbox(updateTimeOnPasteButton, title: LocalizationManager.shared.text("update_time_on_paste"), default: DittoSettings.updateTimeOnPaste) { DittoSettings.updateTimeOnPaste = $0 }
         bindCheckbox(hideOnPasteButton, title: LocalizationManager.shared.text("hide_on_paste"), default: DittoSettings.hideDittoOnPaste) { DittoSettings.hideDittoOnPaste = $0 }
+        bindCheckbox(saveNotificationButton, title: LocalizationManager.shared.text("show_save_notification"), default: DittoSettings.showSaveNotification) { DittoSettings.showSaveNotification = $0 }
+        bindCheckbox(saveAnimationButton, title: LocalizationManager.shared.text("show_save_animation"), default: DittoSettings.showSaveAnimation) { DittoSettings.showSaveAnimation = $0 }
         let restoreClipboardButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
         bindCheckbox(restoreClipboardButton, title: LocalizationManager.shared.text("restore_clipboard_after_paste"), default: DittoSettings.restoreClipboardAfterPaste) { DittoSettings.restoreClipboardAfterPaste = $0 }
 
@@ -201,6 +217,8 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
             [label(LocalizationManager.shared.text("max_history")), maxHistoryPopup],
             [NSView(), openAtLoginButton],
             [NSView(), playSoundButton],
+            [NSView(), saveNotificationButton],
+            [NSView(), saveAnimationButton],
             [NSView(), promptOnDeleteButton],
             [NSView(), updateTimeOnPasteButton],
             [NSView(), hideOnPasteButton],
@@ -219,18 +237,30 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         fontSizePopup.action = #selector(fontSizeChanged)
         linesPerRowPopup.target = self
         linesPerRowPopup.action = #selector(linesPerRowChanged)
+        positioningPopup.target = self
+        positioningPopup.action = #selector(positioningChanged)
         let alwaysOnTopButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
         let showFirstTenButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
-        bindCheckbox(drawThumbnailsButton, title: LocalizationManager.shared.text("draw_thumbnails"), default: DittoSettings.drawThumbnails) { DittoSettings.drawThumbnails = $0 }
+        bindCheckbox(drawThumbnailsButton, title: LocalizationManager.shared.text("draw_thumbnails"), default: DittoSettings.drawThumbnails) { [weak self] in
+            DittoSettings.drawThumbnails = $0
+            self?.onChanged()
+        }
         bindCheckbox(pasteAsPlainTextButton, title: LocalizationManager.shared.text("paste_as_plain_text_default"), default: DittoSettings.pasteAsPlainTextByDefault) { DittoSettings.pasteAsPlainTextByDefault = $0 }
-        bindCheckbox(alwaysOnTopButton, title: LocalizationManager.shared.text("always_on_top"), default: DittoSettings.alwaysOnTop) { DittoSettings.alwaysOnTop = $0 }
-        bindCheckbox(showFirstTenButton, title: LocalizationManager.shared.text("show_first_ten"), default: DittoSettings.showFirstTenText) { DittoSettings.showFirstTenText = $0 }
+        bindCheckbox(alwaysOnTopButton, title: LocalizationManager.shared.text("always_on_top"), default: DittoSettings.alwaysOnTop) { [weak self] in
+            DittoSettings.alwaysOnTop = $0
+            self?.onChanged()
+        }
+        bindCheckbox(showFirstTenButton, title: LocalizationManager.shared.text("show_first_ten"), default: DittoSettings.showFirstTenText) { [weak self] in
+            DittoSettings.showFirstTenText = $0
+            self?.onChanged()
+        }
 
         return grid([
             [label(LocalizationManager.shared.text("theme")), themePopup],
             [label(LocalizationManager.shared.text("accent_color")), accentWell],
             [label(LocalizationManager.shared.text("font_size")), fontSizePopup],
             [label(LocalizationManager.shared.text("lines_per_row")), linesPerRowPopup],
+            [label(LocalizationManager.shared.text("positioning")), positioningPopup],
             [NSView(), drawThumbnailsButton],
             [NSView(), pasteAsPlainTextButton],
             [NSView(), alwaysOnTopButton],
@@ -239,10 +269,22 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     }
 
     private func searchTab() -> NSView {
-        bindCheckbox(searchDescriptionButton, title: LocalizationManager.shared.text("description"), default: DittoSettings.searchDescription) { DittoSettings.searchDescription = $0 }
-        bindCheckbox(searchFullTextButton, title: LocalizationManager.shared.text("full_text"), default: DittoSettings.searchFullText) { DittoSettings.searchFullText = $0 }
-        bindCheckbox(searchQuickPasteButton, title: LocalizationManager.shared.text("quick_paste_text"), default: DittoSettings.searchQuickPaste) { DittoSettings.searchQuickPaste = $0 }
-        bindCheckbox(regexCaseInsensitiveButton, title: LocalizationManager.shared.text("regex_case_insensitive"), default: DittoSettings.regexCaseInsensitive) { DittoSettings.regexCaseInsensitive = $0 }
+        bindCheckbox(searchDescriptionButton, title: LocalizationManager.shared.text("description"), default: DittoSettings.searchDescription) { [weak self] in
+            DittoSettings.searchDescription = $0
+            self?.onChanged()
+        }
+        bindCheckbox(searchFullTextButton, title: LocalizationManager.shared.text("full_text"), default: DittoSettings.searchFullText) { [weak self] in
+            DittoSettings.searchFullText = $0
+            self?.onChanged()
+        }
+        bindCheckbox(searchQuickPasteButton, title: LocalizationManager.shared.text("quick_paste_text"), default: DittoSettings.searchQuickPaste) { [weak self] in
+            DittoSettings.searchQuickPaste = $0
+            self?.onChanged()
+        }
+        bindCheckbox(regexCaseInsensitiveButton, title: LocalizationManager.shared.text("regex_case_insensitive"), default: DittoSettings.regexCaseInsensitive) { [weak self] in
+            DittoSettings.regexCaseInsensitive = $0
+            self?.onChanged()
+        }
         return grid([
             [label(LocalizationManager.shared.text("search_in")), NSView()],
             [NSView(), searchDescriptionButton],
@@ -259,7 +301,11 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         includeAppsField.action = #selector(appFilterChanged)
         excludeAppsField.target = self
         excludeAppsField.action = #selector(appFilterChanged)
-        bindCheckbox(enableExpiryButton, title: LocalizationManager.shared.text("enable_expiry"), default: DittoSettings.checkExpiredEntries) { DittoSettings.checkExpiredEntries = $0 }
+        bindCheckbox(enableExpiryButton, title: LocalizationManager.shared.text("enable_expiry"), default: DittoSettings.checkExpiredEntries) { [weak self] in
+            DittoSettings.checkExpiredEntries = $0
+            self?.store.enforceExpiry()
+            self?.onChanged()
+        }
         bindCheckbox(allowDuplicatesButton, title: LocalizationManager.shared.text("allow_duplicate_clips"), default: DittoSettings.allowDuplicates) { DittoSettings.allowDuplicates = $0 }
         bindCheckbox(multiPasteReverseButton, title: LocalizationManager.shared.text("multi_paste_reverse"), default: DittoSettings.multiPasteReverse) { DittoSettings.multiPasteReverse = $0 }
         bindCheckbox(saveMultiPasteButton, title: LocalizationManager.shared.text("multi_paste_save_new"), default: DittoSettings.saveMultiPaste) { DittoSettings.saveMultiPaste = $0 }
@@ -278,6 +324,9 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         webSearchUrlField.target = self
         webSearchUrlField.action = #selector(webSearchUrlChanged)
         regexFiltersField.placeholderString = "\\d{6}\npassword\nsecret"
+        regexFiltersField.usesSingleLineMode = false
+        regexFiltersField.cell?.wraps = true
+        regexFiltersField.cell?.isScrollable = true
         regexFiltersField.target = self
         regexFiltersField.action = #selector(regexFiltersChanged)
 
@@ -322,13 +371,21 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
             pasteDisplay.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
             let copyButton = NSButton(title: LocalizationManager.shared.text("copy_buffer_copy_hotkey"), target: self, action: #selector(recordCopyKey(_:)))
             copyButton.tag = index
+            copyButton.bezelStyle = .rounded
             let pasteButton = NSButton(title: LocalizationManager.shared.text("copy_buffer_paste_hotkey"), target: self, action: #selector(recordPasteKey(_:)))
             pasteButton.tag = index
+            pasteButton.bezelStyle = .rounded
+            let clearButton = NSButton(title: LocalizationManager.shared.text("clear"), target: self, action: #selector(clearCopyBufferKeys(_:)))
+            clearButton.tag = index
+            clearButton.bezelStyle = .rounded
+            copyBufferCopyLabels.append(copyDisplay)
+            copyBufferPasteLabels.append(pasteDisplay)
             row.addArrangedSubview(title)
             row.addArrangedSubview(copyDisplay)
             row.addArrangedSubview(copyButton)
             row.addArrangedSubview(pasteDisplay)
             row.addArrangedSubview(pasteButton)
+            row.addArrangedSubview(clearButton)
             stack.addArrangedSubview(row)
         }
         let container = NSView()
@@ -515,6 +572,14 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         }
         linesPerRowPopup.selectItem(withTitle: "\(DittoSettings.linesPerRow)")
 
+        positioningPopup.removeAllItems()
+        for option in DittoSettings.WindowPositioning.allCases {
+            positioningPopup.addItem(withTitle: option.title)
+        }
+        if let index = DittoSettings.WindowPositioning.allCases.firstIndex(of: DittoSettings.windowPositioning) {
+            positioningPopup.selectItem(at: index)
+        }
+
         includeAppsField.stringValue = DittoSettings.copyAppInclude
         excludeAppsField.stringValue = DittoSettings.copyAppExclude
         expiryDaysField.stringValue = "\(DittoSettings.expiredEntriesDays)"
@@ -592,8 +657,39 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         }
     }
 
+    @objc private func positioningChanged() {
+        if let option = DittoSettings.WindowPositioning.allCases[safe: positioningPopup.indexOfSelectedItem] {
+            DittoSettings.windowPositioning = option
+            onChanged()
+        }
+    }
+
     @objc private func toggleLogin(_ on: Bool) {
+        DittoSettings.openAtLogin = on
         if on { loginAgent.installOrRefresh() } else { loginAgent.disable() }
+    }
+
+    private func commitPendingEdits() {
+        guard tabView.numberOfTabViewItems > 0 else { return }
+        window?.makeFirstResponder(nil)
+        appFilterChanged()
+        expiryDaysChanged()
+        maxClipSizeChanged()
+        multiPasteSeparatorChanged()
+        slugifySeparatorChanged()
+        diffAppChanged()
+        translateUrlChanged()
+        webSearchUrlChanged()
+        regexFiltersChanged()
+        passwordChanged()
+        if let value = Int(portField.stringValue), (1_024...65_535).contains(value), value != DittoSettings.sendRecvPort {
+            DittoSettings.sendRecvPort = value
+            restartSyncIfEnabled()
+        }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        commitPendingEdits()
     }
 
     @objc private func appFilterChanged() {
@@ -625,13 +721,14 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
 
     @objc private func regexFiltersChanged() {
         let lines = regexFiltersField.stringValue
-            .components(separatedBy: "\n")
+            .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.isEmpty == false }
         DittoSettings.regexCopyFilters = lines
     }
 
     @objc private func syncEnabledChanged() {
+        commitPendingEdits()
         let enabled = syncEnabledButton.state == .on
         if enabled && DittoSettings.networkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             syncEnabledButton.state = .off
@@ -681,24 +778,43 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
     }
 
     @objc private func recordCopyKey(_ sender: NSButton) {
+        let index = sender.tag
         HotKeyRecorder.record { [weak self] hotKey in
-            guard let hotKey else { return }
-            self?.copyBufferManager.slotHotKeys[sender.tag].copyKey = hotKey
-            self?.copyBufferManager.save()
-            self?.onChanged()
+            guard let self, let hotKey, self.copyBufferManager.slotHotKeys.indices.contains(index) else { return }
+            self.copyBufferManager.slotHotKeys[index].copyKey = hotKey
+            self.copyBufferManager.save()
+            self.copyBufferCopyLabels[safe: index]?.stringValue = hotKey.displayString
+            self.onChanged()
         }
     }
 
     @objc private func recordPasteKey(_ sender: NSButton) {
+        let index = sender.tag
         HotKeyRecorder.record { [weak self] hotKey in
-            guard let hotKey else { return }
-            self?.copyBufferManager.slotHotKeys[sender.tag].pasteKey = hotKey
-            self?.copyBufferManager.save()
-            self?.onChanged()
+            guard let self, let hotKey, self.copyBufferManager.slotHotKeys.indices.contains(index) else { return }
+            self.copyBufferManager.slotHotKeys[index].pasteKey = hotKey
+            self.copyBufferManager.save()
+            self.copyBufferPasteLabels[safe: index]?.stringValue = hotKey.displayString
+            self.onChanged()
         }
     }
 
-    @objc private func closeWindow() { close() }
+    @objc private func clearCopyBufferKeys(_ sender: NSButton) {
+        let index = sender.tag
+        guard copyBufferManager.slotHotKeys.indices.contains(index) else { return }
+        copyBufferManager.slotHotKeys[index].copyKey = nil
+        copyBufferManager.slotHotKeys[index].pasteKey = nil
+        copyBufferManager.save()
+        let empty = LocalizationManager.shared.text("empty")
+        copyBufferCopyLabels[safe: index]?.stringValue = empty
+        copyBufferPasteLabels[safe: index]?.stringValue = empty
+        onChanged()
+    }
+
+    @objc private func closeWindow() {
+        commitPendingEdits()
+        close()
+    }
 
     // Database path field + Choose button in one row
     private func databasePathRow() -> NSView {
@@ -738,27 +854,6 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
         return stack
     }
 
-    private func databaseRow() -> NSView {
-        databasePathField.placeholderString = "~/Library/Application Support/Ditto/Ditto.db"
-        databasePathField.stringValue = displayedDatabasePath
-        databasePathField.isEditable = false
-        databasePathField.translatesAutoresizingMaskIntoConstraints = false
-        databaseChooseButton.bezelStyle = .rounded
-        databaseChooseButton.target = self
-        databaseChooseButton.action = #selector(chooseDatabaseLocation)
-        databaseChooseButton.translatesAutoresizingMaskIntoConstraints = false
-
-        let backupBtn = NSButton(title: LocalizationManager.shared.text("backup_database"), target: self, action: #selector(backupDatabaseFromPrefs))
-        backupBtn.bezelStyle = .rounded
-        let compactBtn = NSButton(title: LocalizationManager.shared.text("compact_database"), target: self, action: #selector(compactDatabaseFromPrefs))
-        compactBtn.bezelStyle = .rounded
-
-        let stack = NSStackView(views: [databasePathField, databaseChooseButton, backupBtn, compactBtn])
-        stack.orientation = .horizontal
-        stack.spacing = 8
-        return stack
-    }
-
     @objc private func backupDatabaseFromPrefs() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType(filenameExtension: "db") ?? .data]
@@ -773,6 +868,7 @@ final class PreferencesWindowController: NSWindowController, NSTabViewDelegate {
                     message = LocalizationManager.shared.text("backup_success")
                 } catch {
                     message = LocalizationManager.shared.text("operation_failed")
+                        + "\n" + ClipboardStore.describe(error)
                 }
                 DispatchQueue.main.async {
                     let alert = NSAlert()

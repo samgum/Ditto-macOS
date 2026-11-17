@@ -7,6 +7,7 @@ import Foundation
 final class SaveNotifier {
     static let shared = SaveNotifier()
     private var panel: NSPanel?
+    private var messageLabel: NSTextField?
     private var hideWorkItem: DispatchWorkItem?
 
     private init() {}
@@ -47,25 +48,27 @@ final class SaveNotifier {
             panel.hasShadow = true
             panel.isMovable = false
             panel.collectionBehavior = [.canJoinAllSpaces, .ignoresCycle]
+            let container = NSView(frame: NSRect(x: 0, y: 0, width: 280, height: 44))
             let label = NSTextField(labelWithString: "")
             label.font = NSFont.systemFont(ofSize: 12)
             label.textColor = .labelColor
             label.lineBreakMode = .byTruncatingTail
             label.translatesAutoresizingMaskIntoConstraints = false
-            panel.contentView = label
+            container.addSubview(label)
+            panel.contentView = container
             NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: panel.contentView!.leadingAnchor, constant: 12),
-                label.trailingAnchor.constraint(equalTo: panel.contentView!.trailingAnchor, constant: -12),
-                label.centerYAnchor.constraint(equalTo: panel.contentView!.centerYAnchor)
+                label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+                label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+                label.centerYAnchor.constraint(equalTo: container.centerYAnchor)
             ])
+            self.messageLabel = label
             self.panel = panel
         }
 
         let trimmed = preview.replacingOccurrences(of: "\n", with: " ⏎ ").trimmingCharacters(in: .whitespacesAndNewlines)
         let truncated = trimmed.count > 40 ? String(trimmed.prefix(40)) + "…" : trimmed
-        let label = panel?.contentView as? NSTextField
-        label?.stringValue = "\(symbol) " + truncated
-        label?.toolTip = trimmed
+        messageLabel?.stringValue = "\(symbol) " + truncated
+        messageLabel?.toolTip = trimmed
         panel?.alphaValue = 1
 
         // Position below the menu-bar icon, top-right of the screen.

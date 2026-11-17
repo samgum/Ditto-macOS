@@ -32,42 +32,52 @@ struct SearchEngine {
 
     func matches(_ entry: ClipboardEntry, fullTextProvider: (ClipboardEntry) -> String?) -> Bool {
         let resolved = resolveTarget()
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return true }
+        let leadingTrimmed = String(query.drop(while: { $0.isWhitespace }))
+        guard leadingTrimmed.isEmpty == false else { return true }
+        let stripped = stripPrefix(leadingTrimmed).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard stripped.isEmpty == false else { return true }
 
         switch resolved {
         case .quickPasteOnly:
-            return matchString(entry.quickPasteText ?? "")
+            return matchString(entry.quickPasteText ?? "", patternText: stripped)
         case .fullTextOnly:
-            return matchString(fullTextProvider(entry) ?? entry.text ?? "")
+            return matchString(fullTextProvider(entry) ?? entry.text ?? "", patternText: stripped)
         case .defaultTargets:
             var parts: [String] = []
-            if DittoSettings.searchDescription, let text = entry.text { parts.append(text) }
+            if DittoSettings.searchDescription {
+                if let text = entry.text {
+                    parts.append(text)
+                } else {
+                    parts.append(entry.preview)
+                }
+                if let fileURLs = entry.fileURLs {
+                    parts.append(contentsOf: fileURLs)
+                }
+            }
             if DittoSettings.searchQuickPaste, let qpt = entry.quickPasteText { parts.append(qpt) }
             if DittoSettings.searchFullText { parts.append(fullTextProvider(entry) ?? "") }
-            let haystack = parts.isEmpty ? (entry.text ?? "") : parts.joined(separator: "\n")
-            return matchString(haystack)
+            let haystack = parts.isEmpty ? (entry.text ?? entry.preview) : parts.joined(separator: "\n")
+            return matchString(haystack, patternText: stripped)
         }
     }
 
     private func resolveTarget() -> ResolvedTarget {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("/q ") || trimmed.hasPrefix("\\q ") {
+        let leadingTrimmed = String(query.drop(while: { $0.isWhitespace }))
+        if leadingTrimmed.hasPrefix("/q ") || leadingTrimmed.hasPrefix("\\q ") {
             return .quickPasteOnly
         }
-        if trimmed.hasPrefix("/f ") || trimmed.hasPrefix("\\f ") {
+        if leadingTrimmed.hasPrefix("/f ") || leadingTrimmed.hasPrefix("\\f ") {
             return .fullTextOnly
         }
         return .defaultTargets
     }
 
-    private func matchString(_ value: String) -> Bool {
-        let trimmed = stripPrefix(query.trimmingCharacters(in: .whitespacesAndNewlines))
+    private func matchString(_ value: String, patternText trimmed: String) -> Bool {
         switch mode {
         case .contains:
             return value.range(of: trimmed, options: caseSensitive ? [] : [.caseInsensitive, .diacriticInsensitive]) != nil
         case .wildcard:
-            var pattern = "^"
+            var pattern = "(?s)^"
             for char in trimmed {
                 switch char {
                 case "*": pattern += ".*"

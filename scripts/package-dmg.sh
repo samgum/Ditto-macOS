@@ -13,10 +13,16 @@ APP_BUNDLE="$STAGE_DIR/$APP_NAME.app"
 RESOURCES_DIR="$ROOT_DIR/Resources"
 
 echo "==> Building release binary"
-swift build --package-path "$ROOT_DIR" -c release
+if [[ "${UNIVERSAL_BINARY:-1}" == "1" ]] && swift build --package-path "$ROOT_DIR" -c release --arch arm64 --arch x86_64; then
+  BIN_DIR="$(swift build --package-path "$ROOT_DIR" -c release --arch arm64 --arch x86_64 --show-bin-path)"
+else
+  echo "    (falling back to host-architecture release build)"
+  swift build --package-path "$ROOT_DIR" -c release
+  BIN_DIR="$(swift build --package-path "$ROOT_DIR" -c release --show-bin-path)"
+fi
 
-BINARY="$ROOT_DIR/.build/release/DittoMac"
-RESOURCE_BUNDLE="$ROOT_DIR/.build/release/DittoMac_DittoMac.bundle"
+BINARY="$BIN_DIR/DittoMac"
+RESOURCE_BUNDLE="$BIN_DIR/DittoMac_DittoMac.bundle"
 if [[ ! -f "$BINARY" ]]; then
   echo "Build did not produce $BINARY" >&2
   exit 1
@@ -35,11 +41,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$EXEC_NAME"
 cp "$RESOURCES_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
-
-# Bundle localizations
-if [[ -d "$ROOT_DIR/Sources/DittoMac/Localizations" ]]; then
-  cp -R "$ROOT_DIR/Sources/DittoMac/Localizations" "$APP_BUNDLE/Contents/Resources/Localizations"
-fi
+echo "    binary architectures: $(lipo -archs "$APP_BUNDLE/Contents/MacOS/$EXEC_NAME")"
 
 # PkgInfo
 printf 'APPL????' > "$APP_BUNDLE/Contents/PkgInfo"
@@ -67,13 +69,14 @@ echo "==> Ad-hoc code signing"
 # re-prompts. A plain ad-hoc signature lets the Accessibility grant apply
 # persistently, so paste works without re-prompting.
 codesign --force --deep --sign - "$APP_BUNDLE"
+codesign --verify --deep --strict "$APP_BUNDLE"
 echo "    signature:"
 codesign -dv "$APP_BUNDLE" 2>&1 | sed 's/^/    /' || true
 
 echo "==> Verifying packaged app resources"
-PACKAGED_LOCALIZATION="$APP_BUNDLE/Contents/Resources/$(basename "$RESOURCE_BUNDLE")/Localizations/en.json"
-if [[ ! -f "$PACKAGED_LOCALIZATION" ]]; then
-  echo "Packaged app is missing $PACKAGED_LOCALIZATION" >&2
+BUNDLE_ROOT="$APP_BUNDLE/Contents/Resources/$(basename "$RESOURCE_BUNDLE")"
+if [[ ! -f "$BUNDLE_ROOT/Localizations/en.json" && ! -f "$BUNDLE_ROOT/Contents/Resources/Localizations/en.json" ]]; then
+  echo "Packaged app is missing Localizations/en.json inside $BUNDLE_ROOT" >&2
   exit 1
 fi
 
@@ -125,7 +128,7 @@ hdiutil detach "$MOUNT" 2>/dev/null || true
 hdiutil attach -readwrite -noverify -noautoopen "$RW_DMG"
 mkdir -p "$MOUNT/.background"
 cp "$BG" "$MOUNT/.background/background.png"
-osascript <<APPLESCRIPT
+if ! perl -e 'alarm 15; exec @ARGV' osascript - <<APPLESCRIPT; then
 tell application "Finder"
   tell disk "$APP_NAME"
     open
@@ -145,6 +148,8 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
+  echo "    warning: Finder AppleScript layout timed out or was denied; continuing with standard DMG layout" >&2
+fi
 # Let Finder write the .DS_Store, then detach (with retry — CI runners
 # sometimes report "Resource busy" right after AppleScript closes the window).
 sleep 2
@@ -159,7 +164,10 @@ hdiutil detach -force "$MOUNT" 2>/dev/null || true
 # 3) Convert to compressed read-only (preserves the layout + background).
 hdiutil convert "$RW_DMG" -ov -format UDZO -imagekey zlib-level=9 -o "$DIST_DIR/$DMG_NAME"
 rm -f "$RW_DMG"
+SHASUM=$(shasum -a 256 "$DIST_DIR/$DMG_NAME" | awk '{print $1}')
+echo "$SHASUM  $DMG_NAME" > "$DIST_DIR/${DMG_NAME}.sha256"
 
 echo "==> Done: $DIST_DIR/$DMG_NAME (beautified: arrow + drag-to-Applications layout)"
+echo "    SHA-256: $SHASUM"
 echo "    (Ad-hoc signed — to open on another Mac: right-click ▸ Open, or"
 echo "     approve in System Settings ▸ Privacy & Security.)"

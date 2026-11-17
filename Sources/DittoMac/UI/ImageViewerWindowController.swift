@@ -24,18 +24,29 @@ final class ImageViewerWindowController: NSWindowController {
         scrollView.autohidesScrollers = true
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.frame = NSRect(x: 0, y: 0, width: 600, height: 440)
-        if let imageBlobKey = entry.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
-            imageView.image = NSImage(data: data)
+        imageView.imageScaling = .scaleProportionallyDown
+        if let imageBlobKey = entry.imageBlobKey,
+           let data = store.blobData(named: imageBlobKey),
+           let image = NSImage(data: data) {
+            imageView.image = image
+            imageView.frame = NSRect(
+                x: 0,
+                y: 0,
+                width: max(600, image.size.width),
+                height: max(440, image.size.height)
+            )
+        } else {
+            imageView.frame = NSRect(x: 0, y: 0, width: 600, height: 440)
         }
 
-        window.contentView = scrollView
+        let root = NSView()
+        root.addSubview(scrollView)
+        window.contentView = root
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: (window.contentView?.topAnchor)!),
-            scrollView.leadingAnchor.constraint(equalTo: (window.contentView?.leadingAnchor)!),
-            scrollView.trailingAnchor.constraint(equalTo: (window.contentView?.trailingAnchor)!),
-            scrollView.bottomAnchor.constraint(equalTo: (window.contentView?.bottomAnchor)!)
+            scrollView.topAnchor.constraint(equalTo: root.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
     }
 

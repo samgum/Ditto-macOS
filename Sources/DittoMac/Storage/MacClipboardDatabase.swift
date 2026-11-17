@@ -180,6 +180,9 @@ final class MacClipboardDatabase {
         }
         // Backfill clipOrder for legacy rows that have none / zero.
         _ = try? execute("UPDATE ClipboardEntries SET clipOrder = createdAt WHERE clipOrder IS NULL OR clipOrder = 0")
+        // Heal legacy rows where deleting a top-level group wrote 0 instead of NULL.
+        _ = try? execute("UPDATE Groups SET parentId = NULL WHERE parentId = 0")
+        _ = try? execute("UPDATE ClipboardEntries SET groupId = NULL WHERE groupId = 0")
 
         setUserVersion(Self.currentSchemaVersion)
         schemaVersion = Self.currentSchemaVersion
@@ -274,13 +277,13 @@ final class MacClipboardDatabase {
                         neverAutoDelete: sqlite3_column_int(statement, 9) != 0,
                         quickPasteText: Self.optionalString(statement, 10),
                         clipOrder: sqlite3_column_double(statement, 11),
-                        shortcutKey: Int(sqlite3_column_int(statement, 12)),
+                        shortcutKey: Int(sqlite3_column_int64(statement, 12)),
                         shortcutGlobal: sqlite3_column_int(statement, 13) != 0,
                         moveToGroupShortcut: Self.optionalInt64(statement, 14) ?? 0,
                         globalMoveToGroup: sqlite3_column_int(statement, 15) != 0,
                         crc: Self.optionalInt64(statement, 16),
                         sourceApp: Self.optionalString(statement, 17),
-                        pasteCount: Int(sqlite3_column_int(statement, 18)),
+                        pasteCount: Int(sqlite3_column_int64(statement, 18)),
                         groupId: Self.optionalInt64(statement, 19)
                     )
                 )
@@ -359,13 +362,13 @@ final class MacClipboardDatabase {
                 sqlite3_bind_int(statement, 10, entry.neverAutoDelete ? 1 : 0)
                 self.bindOptionalText(statement, 11, entry.quickPasteText)
                 sqlite3_bind_double(statement, 12, entry.clipOrder)
-                sqlite3_bind_int(statement, 13, Int32(entry.shortcutKey))
+                sqlite3_bind_int64(statement, 13, Int64(entry.shortcutKey))
                 sqlite3_bind_int(statement, 14, entry.shortcutGlobal ? 1 : 0)
                 sqlite3_bind_int64(statement, 15, entry.moveToGroupShortcut)
                 sqlite3_bind_int(statement, 16, entry.globalMoveToGroup ? 1 : 0)
                 Self.bindOptionalInt64(statement, 17, entry.crc)
                 self.bindOptionalText(statement, 18, entry.sourceApp)
-                sqlite3_bind_int(statement, 19, Int32(entry.pasteCount))
+                sqlite3_bind_int64(statement, 19, Int64(entry.pasteCount))
                 Self.bindOptionalInt64(statement, 20, entry.groupId)
                 self.bindOptionalText(statement, 21, entry.pdfBlobKey)
             }
@@ -536,7 +539,7 @@ final class MacClipboardDatabase {
         try transaction {
             // Re-parent clips and child groups to the deleted group's parent.
             let parentId = (try? query("SELECT parentId FROM Groups WHERE id = ?", binds: { sqlite3_bind_int64($0, 1, id) }) {
-                sqlite3_step($0) == SQLITE_ROW ? sqlite3_column_int64($0, 0) : nil
+                sqlite3_step($0) == SQLITE_ROW ? Self.optionalInt64($0, 0) : nil
             }) ?? nil
             if let parentId {
                 try execute("UPDATE ClipboardEntries SET groupId = ? WHERE groupId = ?", binds: { stmt in
@@ -721,18 +724,45 @@ final class MacClipboardDatabase {
     // MARK: - Export archive
 
     func exportArchive(entries: [ClipboardEntry], groups: [ClipGroup], to url: URL) throws {
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
-        let archiveDatabase = try MacClipboardDatabase(url: url, useWAL: false)
-        for entry in entries {
-            for key in [entry.rtfBlobKey, entry.htmlBlobKey, entry.imageBlobKey, entry.pdfBlobKey].compactMap({ $0 }) {
-                guard let data = blobData(key: key) else { continue }
-                _ = try archiveDatabase.saveBlob(data, key: key, fileExtension: URL(fileURLWithPath: key).pathExtension)
+        let manager = FileManager.default
+        try manager.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let staging = url.deletingLastPathComponent()
+            .appendingPathComponent(".ditto-archive-\(UUID().uuidString).db")
+        defer {
+            for path in [staging.path, staging.path + "-wal", staging.path + "-shm"] where manager.fileExists(atPath: path) {
+                try? manager.removeItem(atPath: path)
             }
         }
-        try archiveDatabase.replaceEntries(entries)
-        try archiveDatabase.replaceGroups(groups)
+        do {
+            let archiveDatabase = try MacClipboardDatabase(url: staging, useWAL: false)
+            for entry in entries {
+                let attachments: [(key: String?, ext: String)] = [
+                    (entry.rtfBlobKey, "rtf"),
+                    (entry.htmlBlobKey, "html"),
+                    (entry.imageBlobKey, "png"),
+                    (entry.pdfBlobKey, "pdf")
+                ]
+                for (maybeKey, ext) in attachments {
+                    guard let key = maybeKey else { continue }
+                    guard let data = blobData(key: key) else {
+                        throw MacClipboardDatabaseError.executeFailed(
+                            "Missing clipboard attachment \(key)"
+                        )
+                    }
+                    _ = try archiveDatabase.saveBlob(data, key: key, fileExtension: ext)
+                }
+            }
+            try archiveDatabase.replaceEntries(entries)
+            try archiveDatabase.replaceGroups(groups)
+        }
+        if manager.fileExists(atPath: url.path) {
+            _ = try manager.replaceItemAt(url, withItemAt: staging)
+        } else {
+            try manager.moveItem(at: staging, to: url)
+        }
     }
 
     // MARK: - SQL helpers

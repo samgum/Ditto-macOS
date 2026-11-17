@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Foundation
 
 /// Headless self-test for the pure-logic subsystems. Run with
@@ -403,9 +404,12 @@ enum SelfTest {
                ) {
                 source.setGroup(id: groupedEntry.id, groupId: parentID)
                 source.deleteGroup(id: parentID)
-                let child = source.snapshotGroups().first { $0.id == childID }
-                let reassignedEntry = source.entry(id: groupedEntry.id)
-                check("group deletion reparents children", child?.parentId == nil)
+                source.flush()
+                let reopenedAfterDelete = ClipboardStore(databaseURL: source.databaseFileURL)
+                let child = reopenedAfterDelete.snapshotGroups().first { $0.id == childID }
+                let visibleHierarchyIDs = Set(reopenedAfterDelete.hierarchicalGroups().map { $0.group.id })
+                let reassignedEntry = reopenedAfterDelete.entry(id: groupedEntry.id)
+                check("group deletion reparents children", child?.parentId == nil && visibleHierarchyIDs.contains(childID))
                 check("group deletion reparents clips", reassignedEntry?.groupId == nil)
             } else {
                 check("group deletion reparents children", false)
@@ -494,15 +498,23 @@ enum SelfTest {
             "plain_text", "rich_text_format", "html_format", "png_format", "pdf_format",
             "files_count_format", "update_available_format", "update_message_format",
             "download", "later", "startup_message_format", "accessibility_granted",
-            "grant_accessibility", "backup_success"
+            "grant_accessibility", "backup_success", "move", "rename",
+            "paste_as_image", "position_at_cursor", "position_previous", "all_friends"
         ]
-        let localizedResourcesAreComplete = LocalizationManager.shared.languages.allSatisfy { language in
+        var englishKeySet: Set<String>?
+        if let enURL = LocalizationManager.shared.localizationURL(for: "en"),
+           let enData = try? Data(contentsOf: enURL),
+           let enStrings = try? JSONDecoder().decode([String: String].self, from: enData) {
+            englishKeySet = Set(enStrings.keys)
+        }
+        let localizedResourcesAreComplete = englishKeySet != nil && LocalizationManager.shared.languages.allSatisfy { language in
             guard let url = LocalizationManager.shared.localizationURL(for: language.code),
                   let data = try? Data(contentsOf: url),
                   let strings = try? JSONDecoder().decode([String: String].self, from: data) else {
                 return false
             }
-            return requiredLocalizationKeys.isSubset(of: Set(strings.keys))
+            let keys = Set(strings.keys)
+            return requiredLocalizationKeys.isSubset(of: keys) && keys == englishKeySet
         }
         check("localization resources include new interface strings", localizedResourcesAreComplete)
 
@@ -534,6 +546,107 @@ enum SelfTest {
             } else {
                 check("image capture + paste path", false)
             }
+
+            // Multi-format clip writes a single NSPasteboardItem with all formats
+            if let multiEntry = store.addClipboardPayload(
+                text: "caption",
+                rtfData: nil,
+                htmlData: nil,
+                imageData: png,
+                pdfData: pdfA,
+                fileURLs: []
+            ) {
+                store.copyToPasteboard(multiEntry)
+                let items = NSPasteboard.general.pasteboardItems ?? []
+                check(
+                    "multi-format clip writes one coherent pasteboard item",
+                    items.count == 1 &&
+                    items.first?.string(forType: .string) == "caption" &&
+                    items.first?.data(forType: .png) == png &&
+                    items.first?.data(forType: .pdf) == pdfA
+                )
+            } else {
+                check("multi-format clip writes one coherent pasteboard item", false)
+            }
+        }
+
+        // MARK: 64-bit per-clip shortcut persistence, move up/down, pin/unpin, and self-overwrite guards
+        do {
+            let storeURL = tempDir.appendingPathComponent("shortcuts-and-moves.db")
+            let store = ClipboardStore(databaseURL: storeURL)
+            let first = store.addClipboardPayload(text: "one", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])!
+            let second = store.addClipboardPayload(text: "two", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])!
+            let third = store.addClipboardPayload(text: "three", rtfData: nil, htmlData: nil, imageData: nil, fileURLs: [])!
+
+            let sampleHotKey = HotKey(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey | optionKey | shiftKey))
+            store.setShortcut(id: first.id, shortcutKey: Int(sampleHotKey.encoded), global: true)
+            store.flush()
+            let reloadedShortcut = ClipboardStore(databaseURL: storeURL).entry(id: first.id)
+            check(
+                "64-bit per-clip shortcut survives SQLite round-trip",
+                reloadedShortcut.flatMap { HotKey.decode(Int64($0.shortcutKey)) } == sampleHotKey
+                    && reloadedShortcut?.shortcutGlobal == true
+            )
+
+            // Initial order is [three, two, one]. Moving `three` down once must yield [two, three, one].
+            store.moveClip(id: third.id, direction: .down)
+            check(
+                "moveClip(.down) moves by one position",
+                store.snapshotEntries().map { $0.text ?? "" } == ["two", "three", "one"]
+            )
+            // Moving `one` up once must yield [two, one, three] and survive disk reload.
+            store.moveClip(id: first.id, direction: .up)
+            store.flush()
+            let reloadedOrder = ClipboardStore(databaseURL: storeURL).snapshotEntries().map { $0.text ?? "" }
+            check(
+                "moveClip(.up) moves by one position and persists",
+                reloadedOrder == ["two", "one", "three"] && second.text == "two"
+            )
+
+            // Favoriting a clip pins it; unpin() must clear both favorite and neverAutoDelete.
+            store.toggleFavorite(id: first.id)
+            store.unpin(id: first.id)
+            check("unpin clears favorite and pin flags", store.entry(id: first.id)?.isPinned == false)
+            store.setPinnedToTop(id: first.id)
+            store.setPinnedToTop(id: first.id)
+            check("setPinnedToTop is idempotent", store.entry(id: first.id)?.isPinned == true && store.snapshotEntries().first?.id == first.id)
+
+            // Backup and export must refuse to overwrite the active database file.
+            var refusedSelfBackup = false
+            do { try store.backupDatabase(to: storeURL) } catch { refusedSelfBackup = true }
+            var refusedSelfExport = false
+            do { try store.exportArchive(to: storeURL) } catch { refusedSelfExport = true }
+            check("backup and export refuse overwriting active database", refusedSelfBackup && refusedSelfExport)
+        }
+
+        // MARK: Search multiline wildcards, file clips, CSS colors, slugify separators, and URL query encoding
+        let multilineEntry = ClipboardEntry(text: "first line\nsecond line")
+        check(
+            "wildcard search matches multiline clips",
+            SearchEngine(mode: .wildcard, query: "*first*").matches(multilineEntry, fullTextProvider: { _ in nil }) &&
+            SearchEngine(mode: .wildcard, query: "*second*").matches(multilineEntry, fullTextProvider: { _ in nil })
+        )
+        let fileDropEntry = ClipboardEntry(fileURLs: ["/tmp/Quarterly-Report-2026.pdf"])
+        check(
+            "default search finds file-drop clips by filename",
+            SearchEngine(mode: .contains, query: "Quarterly-Report").matches(fileDropEntry, fullTextProvider: { _ in nil })
+        )
+        check(
+            "prefix-only search query does not hide clips",
+            SearchEngine(mode: .contains, query: "/q ").matches(multilineEntry, fullTextProvider: { _ in nil })
+        )
+        check("css rgb() with spaces detected", ColorCodeDetector.color(from: "rgb(255, 128, 0)") != nil)
+        check("css rgba() with alpha detected", ColorCodeDetector.color(from: "rgba(255, 128, 0, 0.5)") != nil)
+        check("8-digit hex color #RRGGBBAA detected", ColorCodeDetector.color(from: "#ff880080") != nil)
+        check("rgb prose rejected", ColorCodeDetector.color(from: "rgb values are nice") == nil)
+        check("slugify collapses spaced hyphens", TextTransforms.slugify("hello - world") == "hello-world")
+        check("slugify custom separator", TextTransforms.slugify("foo -- bar_baz", separator: "_") == "foo_bar_baz")
+
+        if let searchURL = AppDelegate.buildQueryURL(template: "https://www.google.com/search?q=%s", query: "C++ & Rust = fast?"),
+           let parsedQuery = URLComponents(url: searchURL, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "q" })?.value {
+            check("url query encoding preserves &, +, =, and ?", parsedQuery == "C++ & Rust = fast?")
+        } else {
+            check("url query encoding preserves &, +, =, and ?", false)
         }
 
         print("\n\(passed) passed, \(failed) failed")

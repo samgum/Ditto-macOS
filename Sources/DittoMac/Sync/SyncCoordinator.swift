@@ -57,9 +57,12 @@ final class SyncCoordinator {
             listener.newConnectionHandler = { [weak self] connection in
                 self?.handle(connection: connection)
             }
-            listener.stateUpdateHandler = { state in
+            listener.stateUpdateHandler = { [weak self, weak listener] state in
                 if case .failed = state {
-                    // Listener died; a future start() will re-create it.
+                    listener?.cancel()
+                    if let self, let listener, self.listener === listener {
+                        self.listener = nil
+                    }
                 }
             }
             listener.start(queue: queue)
@@ -125,6 +128,10 @@ final class SyncCoordinator {
             NSLog("Sync: failed to decode incoming clip")
             return
         }
+        guard header.md5.isEmpty || header.md5 == payload.md5() else {
+            NSLog("Sync: incoming clip checksum mismatch")
+            return
+        }
 
         // Decode payloads once, with a size guard against a malicious/huge
         // peer payload that would OOM the receiver.
@@ -160,6 +167,9 @@ final class SyncCoordinator {
         let pdfData = payload.pdfData.flatMap(decode)
         let fileURLs = rawFileURLs.map(URL.init(fileURLWithPath:))
 
+        let safeSender = String(header.sender.prefix(128))
+        let safeComputerName = String(header.computerName.prefix(128))
+
         // addClipboardPayload saves the blobs itself — don't double-save here.
         guard self.store?.addClipboardPayload(
             text: payload.text,
@@ -168,7 +178,7 @@ final class SyncCoordinator {
             imageData: imageData,
             pdfData: pdfData,
             fileURLs: fileURLs,
-            sourceApp: header.sender
+            sourceApp: safeSender
         ) != nil else {
             NSLog("Sync: incoming clip was rejected by the local history store")
             return
@@ -178,7 +188,7 @@ final class SyncCoordinator {
             NotificationCenter.default.post(
                 name: .dittoClipReceived,
                 object: nil,
-                userInfo: ["sender": header.computerName, "manualSend": header.manualSend]
+                userInfo: ["sender": safeComputerName, "manualSend": header.manualSend]
             )
         }
     }
@@ -244,12 +254,27 @@ final class SyncCoordinator {
     }
 
     private func send(to friend: Friend, message: Data) {
+        let host = friend.ipAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard host.isEmpty == false else { return }
         let port = NWEndpoint.Port(rawValue: UInt16(clamping: friend.port)) ?? NWEndpoint.Port(rawValue: 23443)!
-        let connection = NWConnection(host: NWEndpoint.Host(friend.ipAddress), port: port, using: .tcp)
+        let connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: .tcp)
+        let timeout = DispatchWorkItem {
+            NSLog("Sync send to \(host) timed out")
+            connection.cancel()
+        }
+        connection.stateUpdateHandler = { state in
+            if case .failed(let error) = state {
+                timeout.cancel()
+                NSLog("Sync send to \(host) failed: \(error)")
+                connection.cancel()
+            }
+        }
         connection.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + Self.receiveTimeout, execute: timeout)
         connection.send(content: message, completion: .contentProcessed { error in
+            timeout.cancel()
             if let error {
-                NSLog("Sync send to \(friend.ipAddress) failed: \(error)")
+                NSLog("Sync send to \(host) failed: \(error)")
             }
             connection.cancel()
         })
@@ -277,7 +302,7 @@ final class SyncCoordinator {
                 completion(nil, nil)
                 return
             }
-            let headerLength = headerLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+            let headerLength = headerLengthData.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).bigEndian }
             guard headerLength > 0, headerLength <= Self.maximumHeaderBytes else {
                 completion(nil, nil)
                 return
@@ -292,13 +317,13 @@ final class SyncCoordinator {
                         completion(headerData, nil)
                         return
                     }
-                    let payloadLength = payloadLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+                    let payloadLength = payloadLengthData.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).bigEndian }
                     guard payloadLength > 0, payloadLength <= Self.maximumPayloadBytes else {
                         completion(headerData, nil)
                         return
                     }
                     connection.receive(minimumIncompleteLength: Int(payloadLength), maximumLength: Int(payloadLength)) { payloadData, _, _, error in
-                        guard error == nil else {
+                        guard error == nil, let payloadData, payloadData.count == Int(payloadLength) else {
                             completion(headerData, nil)
                             return
                         }

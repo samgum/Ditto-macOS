@@ -177,7 +177,26 @@ final class FriendsWindowController: NSWindowController, NSTableViewDataSource, 
         let ipField = grid.cell(atColumnIndex: 0, rowIndex: 3).contentView as! NSTextField
         alert.accessoryView = grid
         if alert.runModal() == .alertFirstButtonReturn {
-            let friend = Friend(name: nameField.stringValue, ipAddress: ipField.stringValue, port: DittoSettings.sendRecvPort)
+            let rawIP = ipField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard rawIP.isEmpty == false else {
+                NSSound.beep()
+                return
+            }
+            var host = rawIP
+            var port = DittoSettings.sendRecvPort
+            if let colon = rawIP.lastIndex(of: ":"),
+               rawIP.firstIndex(of: ":") == colon,
+               let parsedPort = Int(rawIP[rawIP.index(after: colon)...]),
+               (1_024...65_535).contains(parsedPort) {
+                host = String(rawIP[..<colon]).trimmingCharacters(in: .whitespacesAndNewlines)
+                port = parsedPort
+            }
+            guard host.isEmpty == false else {
+                NSSound.beep()
+                return
+            }
+            let rawName = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let friend = Friend(name: rawName.isEmpty ? host : rawName, ipAddress: host, port: port)
             store.upsertFriend(friend)
             refresh()
         }

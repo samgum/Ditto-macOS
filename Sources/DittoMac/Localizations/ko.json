@@ -223,5 +223,11 @@
   "db_size": "데이터베이스 크기",
   "available_space": "사용 가능 공간",
   "db_relocation_verified": "복사본이 무결성 검사를 통과했습니다.",
-  "db_relocation_rolled_back": "아무것도 옮기지 않았습니다. 현재 데이터베이스는 그대로입니다."
+  "db_relocation_rolled_back": "아무것도 옮기지 않았습니다. 현재 데이터베이스는 그대로입니다.",
+  "move": "이동",
+  "rename": "이름 변경…",
+  "paste_as_image": "이미지로 붙여넣기",
+  "position_at_cursor": "커서 위치",
+  "position_previous": "이전 위치",
+  "all_friends": "모든 친구"
 }

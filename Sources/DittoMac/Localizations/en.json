@@ -223,5 +223,11 @@
   "db_size": "Database size",
   "available_space": "Available space",
   "db_relocation_verified": "The copy passed its integrity check.",
-  "db_relocation_rolled_back": "Nothing was moved. The current database is unchanged."
+  "db_relocation_rolled_back": "Nothing was moved. The current database is unchanged.",
+  "move": "Move",
+  "rename": "Rename…",
+  "paste_as_image": "Paste as Image",
+  "position_at_cursor": "At Cursor",
+  "position_previous": "Previous Position",
+  "all_friends": "All Friends"
 }

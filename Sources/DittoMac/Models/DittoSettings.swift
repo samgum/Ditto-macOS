@@ -20,6 +20,7 @@ enum DittoSettings {
         static let promptWhenDeleting = "Ditto.PromptWhenDeleting"
         static let playSoundOnCopy = "Ditto.PlaySoundOnCopy"
         static let showStartupMessage = "Ditto.ShowStartupMessage"
+        static let openAtLogin = "Ditto.OpenAtLogin"
 
         // expiry
         static let checkExpired = "Ditto.CheckForExpiredEntries"
@@ -210,6 +211,11 @@ enum DittoSettings {
         set { defaults.set(newValue, forKey: Key.showStartupMessage) }
     }
 
+    static var openAtLogin: Bool {
+        get { defaults.object(forKey: Key.openAtLogin) == nil ? true : defaults.bool(forKey: Key.openAtLogin) }
+        set { defaults.set(newValue, forKey: Key.openAtLogin) }
+    }
+
     // MARK: - Expiry
 
     static var checkExpiredEntries: Bool {
@@ -277,7 +283,12 @@ enum DittoSettings {
 
     enum WindowPositioning: String, CaseIterable {
         case atCursor, previousPosition
-        var title: String { self == .atCursor ? "Cursor" : "Previous" }
+        var title: String {
+            switch self {
+            case .atCursor: return LocalizationManager.shared.text("position_at_cursor")
+            case .previousPosition: return LocalizationManager.shared.text("position_previous")
+            }
+        }
     }
 
     static var windowPositioning: WindowPositioning {

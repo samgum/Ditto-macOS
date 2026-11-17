@@ -117,6 +117,59 @@ enum LayoutSelfTest {
             }
         }
 
+        // Verify Preferences tab stability and secondary window layout integrity.
+        let copyBufferManager = CopyBufferManager(store: store)
+        let syncCoordinator = SyncCoordinator()
+        let prefs = PreferencesWindowController(
+            store: store,
+            copyBufferManager: copyBufferManager,
+            syncCoordinator: syncCoordinator,
+            onChanged: {}
+        )
+        if let prefsWindow = prefs.window {
+            prefsWindow.contentView?.layoutSubtreeIfNeeded()
+            let initialFrame = prefsWindow.frame
+            if let tabView = prefsWindow.contentView?.subviews.compactMap({ $0 as? NSTabView }).first {
+                for index in 0..<tabView.numberOfTabViewItems {
+                    tabView.selectTabViewItem(at: index)
+                    prefsWindow.contentView?.layoutSubtreeIfNeeded()
+                }
+                tabView.selectTabViewItem(at: 0)
+            }
+            check("preferences frame stays stable across all tabs", prefsWindow.frame == initialFrame)
+            prefsWindow.close()
+        } else {
+            check("preferences frame stays stable across all tabs", false)
+        }
+
+        if let sample = store.snapshotEntries().first {
+            let props = ClipPropertiesWindowController(store: store, entry: sample, onChanged: {})
+            props.window?.contentView?.layoutSubtreeIfNeeded()
+            check("clip properties window builds cleanly", (props.window?.contentView?.bounds.width ?? 0) > 0)
+            props.window?.close()
+
+            let editor = ClipEditorWindowController(store: store, entry: sample, onChanged: {})
+            editor.window?.contentView?.layoutSubtreeIfNeeded()
+            check("clip editor window builds cleanly", (editor.window?.contentView?.bounds.width ?? 0) > 0)
+            editor.window?.close()
+        }
+
+        let groups = GroupsWindowController(store: store, onChanged: {})
+        groups.window?.contentView?.layoutSubtreeIfNeeded()
+        check("groups window builds cleanly", (groups.window?.contentView?.bounds.width ?? 0) > 0)
+        groups.window?.close()
+
+        let stats = StatisticsWindowController()
+        stats.refresh()
+        stats.window?.contentView?.layoutSubtreeIfNeeded()
+        check("statistics window builds cleanly", (stats.window?.contentView?.bounds.width ?? 0) > 0)
+        stats.window?.close()
+
+        let diff = SideBySideDiffWindow(leftTitle: "Left", leftText: "alpha\nbeta", rightTitle: "Right", rightText: "alpha\ngamma")
+        diff.window?.contentView?.layoutSubtreeIfNeeded()
+        check("side-by-side diff window builds cleanly", (diff.window?.contentView?.bounds.width ?? 0) > 0)
+        diff.window?.close()
+
         print("\n\(passed) passed, \(failed) failed")
         return failed == 0 ? 0 : 1
     }

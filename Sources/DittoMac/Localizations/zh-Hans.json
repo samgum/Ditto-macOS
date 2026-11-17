@@ -223,5 +223,11 @@
   "db_size": "数据库大小",
   "available_space": "可用空间",
   "db_relocation_verified": "副本已通过完整性校验。",
-  "db_relocation_rolled_back": "未移动任何内容，当前数据库保持不变。"
+  "db_relocation_rolled_back": "未移动任何内容，当前数据库保持不变。",
+  "move": "移动",
+  "rename": "重命名…",
+  "paste_as_image": "粘贴为图片",
+  "position_at_cursor": "跟随光标",
+  "position_previous": "上次位置",
+  "all_friends": "全部好友"
 }

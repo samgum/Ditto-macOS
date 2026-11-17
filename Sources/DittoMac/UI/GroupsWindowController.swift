@@ -50,6 +50,8 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
 
         nameField.translatesAutoresizingMaskIntoConstraints = false
         nameField.placeholderString = LocalizationManager.shared.text("group_name")
+        nameField.target = self
+        nameField.action = #selector(addGroup)
 
         addButton.title = LocalizationManager.shared.text("new_group")
         addButton.bezelStyle = .rounded
@@ -63,7 +65,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
         addSubgroupButton.action = #selector(addSubgroup)
         addSubgroupButton.translatesAutoresizingMaskIntoConstraints = false
 
-        renameButton.title = LocalizationManager.shared.text("edit_clip")
+        renameButton.title = LocalizationManager.shared.text("rename")
         renameButton.bezelStyle = .rounded
         renameButton.target = self
         renameButton.action = #selector(renameGroup)
@@ -93,6 +95,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
             scrollView.bottomAnchor.constraint(equalTo: nameField.topAnchor, constant: -12),
 
             nameField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
+            nameField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             nameField.bottomAnchor.constraint(equalTo: buttonRow.topAnchor, constant: -8),
 
             buttonRow.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
@@ -113,7 +116,7 @@ final class GroupsWindowController: NSWindowController, NSTableViewDataSource, N
         nameField.placeholderString = LocalizationManager.shared.text("group_name")
         addButton.title = LocalizationManager.shared.text("new_group")
         addSubgroupButton.title = LocalizationManager.shared.text("new_subgroup")
-        renameButton.title = LocalizationManager.shared.text("edit_clip")
+        renameButton.title = LocalizationManager.shared.text("rename")
         deleteButton.title = LocalizationManager.shared.text("delete")
         refresh()
     }

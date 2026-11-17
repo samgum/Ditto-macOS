@@ -9,7 +9,8 @@ final class ClipPropertiesWindowController: NSWindowController {
     private var entry: ClipboardEntry
     private let onChanged: () -> Void
 
-    private let descriptionField = NSTextView()
+    private let descriptionScroll = NSTextView.scrollableTextView()
+    private var descriptionField: NSTextView { descriptionScroll.documentView as! NSTextView }
     private let quickPasteField = NSTextField()
     private let neverAutoDeleteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let favoriteButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
@@ -22,7 +23,13 @@ final class ClipPropertiesWindowController: NSWindowController {
     private let infoLabel = NSTextField(labelWithString: "")
     private let saveButton = NSButton(title: "", target: nil, action: nil)
     private let closeButton = NSButton(title: "", target: nil, action: nil)
-    private let formatsList = NSTextView()
+    private let formatsScroll = NSTextView.scrollableTextView()
+    private var formatsList: NSTextView { formatsScroll.documentView as! NSTextView }
+    private lazy var clipLabel = label("")
+    private lazy var quickPasteLabel = label("")
+    private lazy var groupLabel = label("")
+    private lazy var shortcutLabel = label("")
+    private lazy var typeLabel = label("")
 
     init(store: ClipboardStore, entry: ClipboardEntry, onChanged: @escaping () -> Void) {
         self.store = store
@@ -45,12 +52,26 @@ final class ClipPropertiesWindowController: NSWindowController {
 
     required init?(coder: NSCoder) { nil }
 
+    func refreshText() {
+        window?.title = LocalizationManager.shared.text("clip_properties")
+        clipLabel.stringValue = LocalizationManager.shared.text("clip")
+        quickPasteLabel.stringValue = LocalizationManager.shared.text("quick_paste_text")
+        groupLabel.stringValue = LocalizationManager.shared.text("group")
+        shortcutLabel.stringValue = LocalizationManager.shared.text("shortcut_key")
+        typeLabel.stringValue = LocalizationManager.shared.text("type")
+        saveButton.title = LocalizationManager.shared.text("save")
+        closeButton.title = LocalizationManager.shared.text("close")
+        shortcutRecordButton.title = LocalizationManager.shared.text("record_hot_key")
+        shortcutClearButton.title = LocalizationManager.shared.text("clear")
+        populate()
+    }
+
     private func configureContent() {
         guard let window else { return }
 
         descriptionField.isEditable = true
+        descriptionField.isRichText = false
         descriptionField.font = NSFont.systemFont(ofSize: 13)
-        descriptionField.translatesAutoresizingMaskIntoConstraints = false
 
         quickPasteField.translatesAutoresizingMaskIntoConstraints = false
         favoriteButton.target = self
@@ -67,16 +88,12 @@ final class ClipPropertiesWindowController: NSWindowController {
         infoLabel.translatesAutoresizingMaskIntoConstraints = false
 
         formatsList.isEditable = false
+        formatsList.isRichText = false
         formatsList.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-        formatsList.translatesAutoresizingMaskIntoConstraints = false
 
-        let descriptionScroll = NSScrollView()
-        descriptionScroll.documentView = descriptionField
         descriptionScroll.hasVerticalScroller = true
         descriptionScroll.translatesAutoresizingMaskIntoConstraints = false
 
-        let formatsScroll = NSScrollView()
-        formatsScroll.documentView = formatsList
         formatsScroll.hasVerticalScroller = true
         formatsScroll.translatesAutoresizingMaskIntoConstraints = false
 
@@ -92,14 +109,20 @@ final class ClipPropertiesWindowController: NSWindowController {
         closeButton.action = #selector(close)
         closeButton.keyEquivalent = "\u{1b}"
 
+        clipLabel.stringValue = LocalizationManager.shared.text("clip")
+        quickPasteLabel.stringValue = LocalizationManager.shared.text("quick_paste_text")
+        groupLabel.stringValue = LocalizationManager.shared.text("group")
+        shortcutLabel.stringValue = LocalizationManager.shared.text("shortcut_key")
+        typeLabel.stringValue = LocalizationManager.shared.text("type")
+
         let grid = NSGridView(views: [
-            [label(LocalizationManager.shared.text("clip")), descriptionScroll],
-            [label(LocalizationManager.shared.text("quick_paste_text")), quickPasteField],
-            [label(LocalizationManager.shared.text("group")), groupPopup],
+            [clipLabel, descriptionScroll],
+            [quickPasteLabel, quickPasteField],
+            [groupLabel, groupPopup],
             [NSView(), favoriteButton],
             [NSView(), neverAutoDeleteButton],
-            [label(LocalizationManager.shared.text("shortcut_key")), shortcutRow()],
-            [label(LocalizationManager.shared.text("type")), formatsScroll]
+            [shortcutLabel, shortcutRow()],
+            [typeLabel, formatsScroll]
         ])
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).xPlacement = .fill
@@ -202,9 +225,10 @@ final class ClipPropertiesWindowController: NSWindowController {
         groupPopup.removeAllItems()
         groupPopup.addItem(withTitle: LocalizationManager.shared.text("ungrouped"))
         var selectedIndex = 0
-        for (index, group) in store.snapshotGroups().enumerated() {
-            groupPopup.addItem(withTitle: group.name)
-            if entry.groupId == group.id { selectedIndex = index + 1 }
+        for (index, item) in store.hierarchicalGroups().enumerated() {
+            let indent = String(repeating: "    ", count: item.depth)
+            groupPopup.addItem(withTitle: indent + item.group.name)
+            if entry.groupId == item.group.id { selectedIndex = index + 1 }
         }
         groupPopup.selectItem(at: selectedIndex)
 
@@ -247,11 +271,18 @@ final class ClipPropertiesWindowController: NSWindowController {
         entry.quickPasteText = quickPasteField.stringValue.isEmpty ? nil : quickPasteField.stringValue
         entry.isFavorite = favoriteButton.state == .on
         entry.neverAutoDelete = neverAutoDeleteButton.state == .on
+        if let hotKey = recordedHotKey {
+            entry.shortcutKey = Int(hotKey.encoded)
+            entry.shortcutGlobal = shortcutGlobalButton.state == .on
+        } else {
+            entry.shortcutKey = 0
+            entry.shortcutGlobal = false
+        }
         if groupPopup.indexOfSelectedItem == 0 {
             entry.groupId = nil
         } else {
             let index = groupPopup.indexOfSelectedItem - 1
-            entry.groupId = store.snapshotGroups()[safe: index]?.id
+            entry.groupId = store.hierarchicalGroups()[safe: index]?.group.id
         }
         store.update(entry)
         onChanged()

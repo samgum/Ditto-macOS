@@ -6,7 +6,7 @@ Ditto for macOS is a native Swift/AppKit clipboard manager for macOS 13 and late
 
 **Author: 伤感咩吖**
 
-**Current version: 1.2.6**
+**Current version: 1.2.7**
 
 **License: GPL-3.0**
 
@@ -99,14 +99,14 @@ No Xcode project is required. The project builds with Swift Package Manager.
 Debug build:
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build
 ```
 
 Release build:
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build -c release
 ```
 
@@ -115,21 +115,21 @@ swift build -c release
 Run the app from source:
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift run DittoMac
 ```
 
 Run the headless self-test:
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift run DittoMac --selftest
 ```
 
 Expected self-test result:
 
 ```text
-84 passed, 0 failed
+101 passed, 0 failed
 ```
 
 The self-test covers text transforms, slugify, color detection, search, AES round trips, LAN-sync safety defaults, QR code generation, database persistence and SQLite-consistent backup/relocation round trips (including integrity verification, refusal to overwrite an existing database, and staging cleanup after a failed relocation), self-contained single-file backups, recovery of WAL-mode databases whose sidecars are missing, rejection of archives with missing attachments, capture de-duplication with a pinned clip on top, shared-blob retention across an overlapping import, PDF capture/archive/sync preservation, group reparenting, copy-buffer cleanup, blob lifecycle cleanup, Windows encryption compatibility helpers, Windows importer rejection behavior, and image paste-path behavior.
@@ -137,14 +137,14 @@ The self-test covers text transforms, slugify, color detection, search, AES roun
 Run the GUI layout check (needs a desktop session; not run in CI):
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift run DittoMac --selftest-ui
 ```
 
 Expected layout self-test result:
 
 ```text
-198 passed, 0 failed
+204 passed, 0 failed
 ```
 
 It builds the real history window in all 11 languages, in light, dark and
@@ -158,20 +158,20 @@ view, and that the clip column keeps more than half the table width.
 Build a release app bundle and DMG:
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 bash scripts/package-dmg.sh
 ```
 
 Generated outputs:
 
 ```text
-dist/Ditto-macOS-1.2.6.dmg
+dist/Ditto-macOS-1.2.7.dmg
 .build/stage/Ditto.app
 ```
 
 The packaging script:
 
-- builds the release binary;
+- builds a Universal Binary (`arm64` + `x86_64`) release executable;
 - stages `Ditto.app`;
 - copies `Info.plist`, icon, and localization resources;
 - ad-hoc signs the app;
@@ -448,7 +448,7 @@ focus.
 Recommended validation loop:
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build
 swift run DittoMac --selftest
 ```
@@ -456,7 +456,7 @@ swift run DittoMac --selftest
 Release validation:
 
 ```bash
-cd /Users/alexdavis/Ditto-macOS
+cd Ditto-macOS
 swift build -c release
 swift run DittoMac --selftest
 bash scripts/package-dmg.sh

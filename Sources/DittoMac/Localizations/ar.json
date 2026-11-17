@@ -223,5 +223,11 @@
   "db_size": "حجم قاعدة البيانات",
   "available_space": "المساحة المتاحة",
   "db_relocation_verified": "اجتازت النسخة فحص السلامة.",
-  "db_relocation_rolled_back": "لم يتم نقل أي شيء. قاعدة البيانات الحالية دون تغيير."
+  "db_relocation_rolled_back": "لم يتم نقل أي شيء. قاعدة البيانات الحالية دون تغيير.",
+  "move": "نقل",
+  "rename": "إعادة تسمية…",
+  "paste_as_image": "لصق كصورة",
+  "position_at_cursor": "عند المؤشر",
+  "position_previous": "الموضع السابق",
+  "all_friends": "كل الأصدقاء"
 }

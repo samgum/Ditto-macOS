@@ -24,17 +24,25 @@ enum DiffPresenter {
         try? left.write(to: leftURL, atomically: true, encoding: .utf8)
         try? right.write(to: rightURL, atomically: true, encoding: .utf8)
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: app)
-        process.arguments = [leftURL.path, rightURL.path]
+        if app.hasSuffix(".app") {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = ["-a", app, "--args", leftURL.path, rightURL.path]
+        } else {
+            process.executableURL = URL(fileURLWithPath: app)
+            process.arguments = [leftURL.path, rightURL.path]
+        }
         try? process.run()
     }
 }
 
-final class SideBySideDiffWindow: NSWindowController {
+final class SideBySideDiffWindow: NSWindowController, NSWindowDelegate {
+    private static var activeControllers: [SideBySideDiffWindow] = []
+
     static func show(leftTitle: String, leftText: String, rightTitle: String, rightText: String) {
-        let window = SideBySideDiffWindow(leftTitle: leftTitle, leftText: leftText, rightTitle: rightTitle, rightText: rightText)
-        window.showWindow(nil)
-        window.window?.makeKeyAndOrderFront(nil)
+        let controller = SideBySideDiffWindow(leftTitle: leftTitle, leftText: leftText, rightTitle: rightTitle, rightText: rightText)
+        activeControllers.append(controller)
+        controller.showWindow(nil)
+        controller.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -45,9 +53,11 @@ final class SideBySideDiffWindow: NSWindowController {
             backing: .buffered,
             defer: false
         )
+        window.applyDittoAppearance()
         window.title = LocalizationManager.shared.text("compare_clips")
         window.center()
         super.init(window: window)
+        window.delegate = self
 
         let leftView = makeTextView(title: leftTitle, text: leftText)
         let rightView = makeTextView(title: rightTitle, text: rightText)
@@ -57,30 +67,40 @@ final class SideBySideDiffWindow: NSWindowController {
         split.addArrangedSubview(leftView)
         split.addArrangedSubview(rightView)
         split.dividerStyle = .thin
-        window.contentView = split
+
+        let root = NSView()
+        root.addSubview(split)
+        window.contentView = root
         NSLayoutConstraint.activate([
-            split.topAnchor.constraint(equalTo: (window.contentView?.topAnchor)!),
-            split.leadingAnchor.constraint(equalTo: (window.contentView?.leadingAnchor)!),
-            split.trailingAnchor.constraint(equalTo: (window.contentView?.trailingAnchor)!),
-            split.bottomAnchor.constraint(equalTo: (window.contentView?.bottomAnchor)!)
+            split.topAnchor.constraint(equalTo: root.topAnchor),
+            split.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            split.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            split.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
     }
 
     required init?(coder: NSCoder) { nil }
 
+    func windowWillClose(_ notification: Notification) {
+        Self.activeControllers.removeAll { $0 === self }
+    }
+
     private func makeTextView(title: String, text: String) -> NSView {
         let container = NSView()
         let label = NSTextField(labelWithString: title)
         label.font = NSFont.boldSystemFont(ofSize: 12)
+        label.lineBreakMode = .byTruncatingTail
         label.translatesAutoresizingMaskIntoConstraints = false
-        let textView = NSTextView()
-        textView.isEditable = false
-        textView.string = text
-        textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        let scroll = NSScrollView()
-        scroll.documentView = textView
-        scroll.hasVerticalScroller = true
+
+        let scroll = NSTextView.scrollableTextView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
+        if let textView = scroll.documentView as? NSTextView {
+            textView.isEditable = false
+            textView.isRichText = false
+            textView.string = text
+            textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+            textView.textContainerInset = NSSize(width: 6, height: 6)
+        }
         container.addSubview(label)
         container.addSubview(scroll)
         NSLayoutConstraint.activate([

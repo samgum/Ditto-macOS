@@ -2,9 +2,19 @@
 
 Author: **伤感咩吖** · A native Swift/AppKit port of [Ditto](https://github.com/sabrogden/Ditto).
 
+## v1.2.7
+
+- **Universal Binary (`arm64` + `x86_64`) DMG packaging & CI verification**: release DMGs now run natively on both Apple Silicon and Intel Macs, with strict `codesign` verification and automatic CI SHA-256 injection into release notes.
+- **Fixed per-clip global shortcut crash & live registration**: storing 64-bit `HotKey` values in SQLite no longer traps on 32-bit overflow, the Global checkbox persists properly, and shortcuts re-register immediately on save/import.
+- **Fixed top-level group deletion orphaning subgroups across restarts**: SQLite `NULL` parent handling now keeps reparented subgroups at root (`NULL` instead of `0`) and heals affected legacy rows on startup.
+- **Fixed single-step clip reordering (`Move Up` / `Move Down`) and `Unpin` on favorited clips**: `Move Up` / `Move Down` move by one row (instead of jumping to top/bottom) and `Unpin` clears both favorite and never-auto-delete flags.
+- **Coherent multi-format pasteboard & drag-and-drop**: rich clips write a single `NSPasteboardItem` with all representations; file drag-out uses valid `file://` URLs and Finder drag-in preserves file URLs and rich formats.
+- **Keyboard-first History UX (with CJK IME safety)**: pressing `Return` from the search box pastes the selected/top clip, `↑`/`↓` navigates results while keeping search focus, and `Escape` clears the query or closes the window in one press.
+- **Preferences, UI layout, search, color swatch, sync & performance improvements**: pending text-field edits auto-commit on tab switch/close/sync toggle; `Open at Login` choice persists across launches; thumbnail `NSCache` eliminates scroll jank; fixed AutoLayout self-constraints and `0×0` text views across secondary windows; added multiline wildcard search, file-drop filename search, CSS `rgb()`/`rgba()`/`#RRGGBBAA` swatches, strict URL query encoding, and hardened LAN sync framing/timeouts.
+
 ## Replication status
 
-A headless `--selftest` exercises the pure-logic subsystems (84 assertions). A
+A headless `--selftest` exercises the pure-logic subsystems (101 assertions), paired with `--selftest-ui` (204 GUI layout assertions). A
 multi-agent audit compared the macOS port against the Windows source across 12
 feature areas; the critical gaps it surfaced have been addressed:
 

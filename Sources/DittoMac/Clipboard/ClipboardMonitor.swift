@@ -47,6 +47,12 @@ final class ClipboardMonitor {
         queue.sync {}
     }
 
+    func restart() {
+        stop()
+        syncChangeCount()
+        start()
+    }
+
     /// Force an immediate capture poll (used after `NSPasteboard.writeObjects`
     /// by our own copy path to keep the change count in sync).
     func syncChangeCount() {
@@ -57,8 +63,9 @@ final class ClipboardMonitor {
     }
 
     private func poll() {
-        guard pasteboard.changeCount != lastChangeCount else { return }
-        lastChangeCount = pasteboard.changeCount
+        let currentChangeCount = pasteboard.changeCount
+        guard currentChangeCount != lastChangeCount else { return }
+        lastChangeCount = currentChangeCount
 
         let frontApp = NSWorkspace.shared.frontmostApplication
         let bundleId = frontApp?.bundleIdentifier
@@ -102,12 +109,12 @@ final class ClipboardMonitor {
             return
         }
 
+        let shouldPlaySound = DittoSettings.playSoundOnCopy
         DispatchQueue.main.async { [weak self] in
+            if shouldPlaySound {
+                NSSound(named: NSSound.Name("Tink"))?.play()
+            }
             self?.onChange?(entry)
-        }
-
-        if DittoSettings.playSoundOnCopy {
-            NSSound(named: NSSound.Name("Tink"))?.play()
         }
     }
 

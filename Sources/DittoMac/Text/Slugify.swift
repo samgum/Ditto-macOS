@@ -143,31 +143,35 @@ enum TextTransforms {
     /// URL-friendly slug. Ported from the Windows `Slugify.h` transliteration
     /// map: accents, Greek, Cyrillic, currency and symbol substitution.
     static func slugify(_ input: String, separator: String = "-") -> String {
+        let sep = separator.isEmpty ? "-" : separator
         var transliterated = ""
         for scalar in input.unicodeScalars {
             transliterated += Slugify.transliterate(scalar)
         }
         let lowered = transliterated.lowercased()
-        let allowed = lowered.unicodeScalars.filter { scalar in
-            (scalar.value >= 0x30 && scalar.value <= 0x39) // 0-9
-                || (scalar.value >= 0x61 && scalar.value <= 0x7A) // a-z
-                || scalar == "-"
-                || scalar.properties.isWhitespace
-        }
+        let separatorScalars = Set(sep.unicodeScalars)
         var collapsed = ""
-        var previousWasSpace = false
-        for scalar in allowed {
-            if scalar.properties.isWhitespace {
-                if previousWasSpace == false {
-                    collapsed += separator
-                    previousWasSpace = true
+        var pendingSeparator = false
+        for scalar in lowered.unicodeScalars {
+            let isAlphaNum = (scalar.value >= 0x30 && scalar.value <= 0x39)
+                || (scalar.value >= 0x61 && scalar.value <= 0x7A)
+            let isDivider = scalar.properties.isWhitespace
+                || scalar == "-"
+                || scalar == "_"
+                || separatorScalars.contains(scalar)
+            if isAlphaNum {
+                if pendingSeparator, collapsed.isEmpty == false {
+                    collapsed += sep
                 }
-            } else {
                 collapsed.unicodeScalars.append(scalar)
-                previousWasSpace = false
+                pendingSeparator = false
+            } else if isDivider {
+                if collapsed.isEmpty == false {
+                    pendingSeparator = true
+                }
             }
         }
-        return collapsed.trimmingCharacters(in: CharacterSet(charactersIn: separator))
+        return collapsed
     }
 
     // MARK: - GUID

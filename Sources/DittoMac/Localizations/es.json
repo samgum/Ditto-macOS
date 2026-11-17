@@ -223,5 +223,11 @@
   "db_size": "Tamaño de la base de datos",
   "available_space": "Espacio disponible",
   "db_relocation_verified": "La copia superó la comprobación de integridad.",
-  "db_relocation_rolled_back": "No se movió nada. La base de datos actual no ha cambiado."
+  "db_relocation_rolled_back": "No se movió nada. La base de datos actual no ha cambiado.",
+  "move": "Mover",
+  "rename": "Renombrar…",
+  "paste_as_image": "Pegar como imagen",
+  "position_at_cursor": "En el cursor",
+  "position_previous": "Posición anterior",
+  "all_friends": "Todos los amigos"
 }

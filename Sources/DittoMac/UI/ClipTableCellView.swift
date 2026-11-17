@@ -6,6 +6,12 @@ import Foundation
 /// "pasted" check. Replaces the default `NSTableCellView` so we can render
 /// rich previews the way the Windows `QListCtrl` does.
 final class ClipTableCellView: NSTableCellView {
+    private static let thumbnailCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 256
+        return cache
+    }()
+
     private let previewLabel = NSTextField(labelWithString: "")
     private let typeIcon = NSImageView()
     private let colorSwatch = NSView()
@@ -129,6 +135,7 @@ final class ClipTableCellView: NSTableCellView {
         theme: DittoTheme,
         previewText: String
     ) {
+        previewLabel.maximumNumberOfLines = DittoSettings.linesPerRow
         previewLabel.font = NSFont.systemFont(ofSize: CGFloat(DittoSettings.fontSize))
         previewLabel.textColor = theme.listBoxText
 
@@ -149,13 +156,18 @@ final class ClipTableCellView: NSTableCellView {
 
         if let hex = entry.detectedColorHex, let color = ColorCodeDetector.color(from: hex) {
             colorSwatch.layer?.backgroundColor = color.cgColor
-            previewLabel.stringValue = hex.uppercased()
+            let rawTrimmed = entry.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? hex
+            if rawTrimmed.hasPrefix("#") {
+                previewLabel.stringValue = hex.uppercased()
+            } else {
+                previewLabel.stringValue = "\(rawTrimmed)  (\(hex.uppercased()))"
+            }
         } else {
             previewLabel.stringValue = ClipboardEntry.truncated(previewText)
         }
 
-        if showsThumbnail, let imageBlobKey = entry.imageBlobKey, let data = store.blobData(named: imageBlobKey) {
-            thumbnailView.image = NSImage(data: data)
+        if showsThumbnail, let imageBlobKey = entry.imageBlobKey {
+            thumbnailView.image = Self.cachedThumbnail(for: imageBlobKey, store: store)
         } else {
             thumbnailView.image = nil
         }
@@ -171,6 +183,35 @@ final class ClipTableCellView: NSTableCellView {
         } else {
             pastedDot.isHidden = true
         }
+    }
+
+    private static func cachedThumbnail(for key: NSString, store: ClipboardStore) -> NSImage? {
+        if let cached = thumbnailCache.object(forKey: key) {
+            return cached
+        }
+        guard let data = store.blobData(named: key as String),
+              let sourceImage = NSImage(data: data) else {
+            return nil
+        }
+        let maxPixelDimension: CGFloat = 96
+        let sourceSize = sourceImage.size
+        guard sourceSize.width > maxPixelDimension || sourceSize.height > maxPixelDimension else {
+            thumbnailCache.setObject(sourceImage, forKey: key)
+            return sourceImage
+        }
+        let scale = min(maxPixelDimension / max(1, sourceSize.width), maxPixelDimension / max(1, sourceSize.height))
+        let targetSize = NSSize(width: max(1, round(sourceSize.width * scale)), height: max(1, round(sourceSize.height * scale)))
+        let thumbnail = NSImage(size: targetSize)
+        thumbnail.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        sourceImage.draw(in: NSRect(origin: .zero, size: targetSize))
+        thumbnail.unlockFocus()
+        thumbnailCache.setObject(thumbnail, forKey: key)
+        return thumbnail
+    }
+
+    private static func cachedThumbnail(for key: String, store: ClipboardStore) -> NSImage? {
+        cachedThumbnail(for: key as NSString, store: store)
     }
 
     private static func symbol(for entry: ClipboardEntry) -> String {

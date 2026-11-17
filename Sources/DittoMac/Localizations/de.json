@@ -223,5 +223,11 @@
   "db_size": "Datenbankgröße",
   "available_space": "Freier Speicher",
   "db_relocation_verified": "Die Kopie hat die Integritätsprüfung bestanden.",
-  "db_relocation_rolled_back": "Es wurde nichts verschoben. Die aktuelle Datenbank bleibt unverändert."
+  "db_relocation_rolled_back": "Es wurde nichts verschoben. Die aktuelle Datenbank bleibt unverändert.",
+  "move": "Verschieben",
+  "rename": "Umbenennen…",
+  "paste_as_image": "Als Bild einfügen",
+  "position_at_cursor": "Am Mauszeiger",
+  "position_previous": "Letzte Position",
+  "all_friends": "Alle Freunde"
 }

@@ -223,5 +223,11 @@
   "db_size": "Taille de la base",
   "available_space": "Espace disponible",
   "db_relocation_verified": "La copie a réussi son contrôle d’intégrité.",
-  "db_relocation_rolled_back": "Rien n’a été déplacé. La base actuelle est inchangée."
+  "db_relocation_rolled_back": "Rien n’a été déplacé. La base actuelle est inchangée.",
+  "move": "Déplacer",
+  "rename": "Renommer…",
+  "paste_as_image": "Coller comme image",
+  "position_at_cursor": "Au curseur",
+  "position_previous": "Position précédente",
+  "all_friends": "Tous les amis"
 }

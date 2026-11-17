@@ -7,7 +7,8 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
     private let store: ClipboardStore
     private var entry: ClipboardEntry
     private let onChanged: () -> Void
-    private let textView = NSTextView()
+    private let scrollView = NSTextView.scrollableTextView()
+    private var textView: NSTextView { scrollView.documentView as! NSTextView }
     private let saveButton = NSButton(title: "", target: nil, action: nil)
     private let saveAndClipboardButton = NSButton(title: "", target: nil, action: nil)
     private let closeButton = NSButton(title: "", target: nil, action: nil)
@@ -35,6 +36,7 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
         textView.isRichText = true
         textView.importsGraphics = false
         textView.allowsUndo = true
+        textView.textContainerInset = NSSize(width: 6, height: 6)
 
         if let key = entry.rtfBlobKey, let data = store.blobData(named: key),
            let attributed = try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil) {
@@ -43,8 +45,6 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
             textView.string = entry.text ?? ""
         }
 
-        let scrollView = NSScrollView()
-        scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -87,6 +87,13 @@ final class ClipEditorWindowController: NSWindowController, NSTextViewDelegate {
     }
 
     required init?(coder: NSCoder) { nil }
+
+    func refreshText() {
+        window?.title = LocalizationManager.shared.text("edit_clip")
+        saveButton.title = LocalizationManager.shared.text("save")
+        saveAndClipboardButton.title = LocalizationManager.shared.text("save") + " + " + LocalizationManager.shared.text("copy")
+        closeButton.title = LocalizationManager.shared.text("close")
+    }
 
     @objc private func save() {
         let text = textView.string

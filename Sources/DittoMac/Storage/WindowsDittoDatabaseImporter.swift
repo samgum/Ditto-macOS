@@ -114,12 +114,16 @@ final class WindowsDittoDatabaseImporter {
     }
 
     private func mainRows(in database: SQLiteDatabase) throws -> [MainRow] {
-        try database.query(
+        let dontAutoDeleteExpr = database.hasColumn(named: "lDontAutoDelete", in: "Main") ? "lDontAutoDelete" : "0"
+        let stickyExpr = database.hasColumn(named: "stickyClipOrder", in: "Main") ? "stickyClipOrder" : "0"
+        let stickyGroupExpr = database.hasColumn(named: "stickyClipGroupOrder", in: "Main") ? "stickyClipGroupOrder" : "0"
+        let orderExpr = database.hasColumn(named: "clipOrder", in: "Main") ? "COALESCE(clipOrder, lDate)" : "lDate"
+        return try database.query(
             """
-            SELECT lID, lDate, mText, lParentID, lDontAutoDelete, stickyClipOrder, stickyClipGroupOrder
+            SELECT lID, lDate, mText, lParentID, \(dontAutoDeleteExpr), \(stickyExpr), \(stickyGroupExpr)
             FROM Main
             WHERE bIsGroup = 0
-            ORDER BY COALESCE(clipOrder, lDate) DESC
+            ORDER BY \(orderExpr) DESC
             """
         ) { statement in
             var rows: [MainRow] = []
@@ -224,28 +228,28 @@ final class WindowsDittoDatabaseImporter {
     }
 
     private func decodedData(_ row: DataRow, exportedArchive: Bool) throws -> Data {
-        guard exportedArchive, let originalSize = row.originalSize else { return row.data }
+        guard exportedArchive, let originalSize = row.originalSize, originalSize > 0 else { return row.data }
         // Cap the allocation — originalSize comes from the imported file
         // (untrusted), so a huge/garbage value must not cause a multi-GB
         // allocation or OOM.
         let maxInflatedSize = 100_000_000 // 100 MB
-        guard originalSize > 0, originalSize <= maxInflatedSize else {
+        guard originalSize <= maxInflatedSize else {
             throw WindowsDittoDatabaseImportError.inflateFailed
         }
         var output = Data(count: originalSize)
+        var actualSize = uLongf(originalSize)
         let result = output.withUnsafeMutableBytes { outputBuffer in
             row.data.withUnsafeBytes { inputBuffer in
-                var outputSize = uLongf(originalSize)
                 return uncompress(
                     outputBuffer.bindMemory(to: Bytef.self).baseAddress,
-                    &outputSize,
+                    &actualSize,
                     inputBuffer.bindMemory(to: Bytef.self).baseAddress,
                     uLong(row.data.count)
                 )
             }
         }
         guard result == Z_OK else { throw WindowsDittoDatabaseImportError.inflateFailed }
-        return output
+        return actualSize < output.count ? output.prefix(Int(actualSize)) : output
     }
 
     private func decodeWindowsUnicodeText(_ data: Data) -> String? {
@@ -344,6 +348,8 @@ private final class SQLiteDatabase {
         let result = sqlite3_open_v2(url.path, &database, flags, nil)
         guard result == SQLITE_OK else {
             let message = database.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? url.path
+            sqlite3_close(database)
+            database = nil
             throw WindowsDittoDatabaseImportError.openFailed(message)
         }
     }

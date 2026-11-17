@@ -44,14 +44,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build release binary
-        run: swift build -c release
-
-      - name: Package Ditto.app + DMG
+      - name: Package Universal Ditto.app + DMG
         run: bash scripts/package-dmg.sh
 
-      - name: Verify signature
-        run: codesign -dv dist/Ditto.app 2>&1 || true
+      - name: Verify signature & universal architectures
+        run: |
+          codesign --verify --deep --strict .build/stage/Ditto.app
+          codesign -dv .build/stage/Ditto.app 2>&1
+          lipo -info .build/stage/Ditto.app/Contents/MacOS/Ditto
 
       - name: Upload versioned DMG artifact
         uses: actions/upload-artifact@v4
@@ -66,16 +66,21 @@ jobs:
           path: .build/stage/Ditto.app
           if-no-files-found: ignore
 
-      - name: Require bilingual release notes
+      - name: Prepare bilingual release notes with verified SHA-256
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           NOTES=".github/release-notes/${GITHUB_REF_NAME}.md"
           test -f "$NOTES"
           grep -q '^# .*（简体中文）$' "$NOTES"
+          DMG_FILE=$(ls dist/Ditto-macOS-*.dmg | head -n 1)
+          SHA256=$(shasum -a 256 "$DMG_FILE" | awk '{print $1}')
+          sed "s/{{SHA256}}/${SHA256}/g" "$NOTES" > .build/release-notes-rendered.md
+          ! grep -q '{{SHA256}}' .build/release-notes-rendered.md
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          body_path: .github/release-notes/${{ github.ref_name }}.md
+          name: Ditto for macOS ${{ github.ref_name }}
+          body_path: .build/release-notes-rendered.md
           files: dist/Ditto-macOS-*.dmg

@@ -7,42 +7,48 @@ import Foundation
 final class MagneticWindowDelegate: NSObject, NSWindowDelegate {
     static let shared = MagneticWindowDelegate()
     private let snapDistance: CGFloat = 20
+    private var isSnapping = false
 
     private override init() { super.init() }
 
     func windowDidMove(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow,
+        guard isSnapping == false,
+              NSEvent.pressedMouseButtons == 0,
+              let window = notification.object as? NSWindow,
               let screen = window.screen ?? NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
         var frame = window.frame
         var snapped = false
 
         // Snap to left edge
-        if abs(frame.minX - visibleFrame.minX) < snapDistance {
+        let leftDelta = abs(frame.minX - visibleFrame.minX)
+        if leftDelta > 0.5 && leftDelta < snapDistance {
             frame.origin.x = visibleFrame.minX
             snapped = true
         }
         // Snap to right edge
-        if abs(frame.maxX - visibleFrame.maxX) < snapDistance {
+        let rightDelta = abs(frame.maxX - visibleFrame.maxX)
+        if rightDelta > 0.5 && rightDelta < snapDistance {
             frame.origin.x = visibleFrame.maxX - frame.width
             snapped = true
         }
         // Snap to top edge
-        if abs(frame.maxY - visibleFrame.maxY) < snapDistance {
+        let topDelta = abs(frame.maxY - visibleFrame.maxY)
+        if topDelta > 0.5 && topDelta < snapDistance {
             frame.origin.y = visibleFrame.maxY - frame.height
             snapped = true
         }
         // Snap to bottom edge
-        if abs(frame.minY - visibleFrame.minY) < snapDistance {
+        let bottomDelta = abs(frame.minY - visibleFrame.minY)
+        if bottomDelta > 0.5 && bottomDelta < snapDistance {
             frame.origin.y = visibleFrame.minY
             snapped = true
         }
 
         if snapped {
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 0.15
-                window.animator().setFrame(frame, display: true)
-            })
+            isSnapping = true
+            window.setFrame(frame, display: true, animate: false)
+            isSnapping = false
         }
     }
 }
